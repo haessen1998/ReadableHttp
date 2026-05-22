@@ -19,12 +19,35 @@ var result = await jsonClient.GetAsync<Dictionary<string, object>>("/hello");
 ```
 
 ```CSharp
+var result = await jsonClient.GetAsync<Dictionary<string, object>>(
+    url: "/hello",
+    query: new
+    {
+        page = 1,
+        size = 20,
+        keyword = "demo"
+    });
+```
+
+```CSharp
 var result = await jsonClient.PostAsync<object, string>(
-    url: "/hello".AppendUrl(("key1", value1), ("key2", value2)),
+    url: "/hello".Query(new { key1 = value1, key2 = value2 }),
     body: new
     {
         Question = "今天天气怎么样"
     });
+```
+
+Query 也支持字典和具名元组：
+
+```CSharp
+"/hello".Query(new Dictionary<string, object?>
+{
+    ["page"] = 1,
+    ["tags"] = new[] { "a", "b" }
+});
+
+"/hello".Query(("page", 1), ("size", 20));
 ```
 
 ## Form Client
@@ -69,4 +92,4 @@ var jsonClient = FluentHttpClient.CreateJsonWithCookie(
 
 ## Compatibility
 
-原有的 `FluentHttpClient.Create()`、`ReadJsonAsync`、`ReadFormAsync`、`ReadStreamAsync`、`GetFromJsonAsync`、`PostFromJsonAsync` 等 `HttpClient` 扩展仍然可用。新项目建议优先使用 `CreateJson` 和 `CreateForm`。
+原有的 `FluentHttpClient.Create()`、`ReadJsonAsync`、`ReadFormAsync`、`ReadStreamAsync`、`GetFromJsonAsync`、`PostFromJsonAsync` 等 `HttpClient` 扩展仍然可用。新项目建议优先使用 `CreateJson`、`CreateForm` 和 `Query`。

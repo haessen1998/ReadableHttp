@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text;
 
 namespace FluentHttp.Json;
@@ -113,25 +115,39 @@ public static class FluentHttpExtensions
         return httpClient;
     }
 
-    public static string AppendUrl(this string url, params (object, object?)[] arguments)
+    public static string Query(this string url, object values)
+    {
+        return url.Query(ToQueryValues(values));
+    }
+
+    public static string Query(this string url, IReadOnlyDictionary<string, object?> values)
+    {
+        return url.Query(values.SelectMany(pair => CreateQueryPairs(pair.Key, pair.Value)));
+    }
+
+    public static string Query(this string url, params (string Key, object? Value)[] values)
+    {
+        return url.Query(values.SelectMany(pair => CreateQueryPairs(pair.Key, pair.Value)));
+    }
+
+    private static string Query(this string url, IEnumerable<KeyValuePair<string, string>> values)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
 
-        if (arguments.Length == 0)
+        var query = string.Join("&", values.Select(pair =>
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key))
+            {
+                throw new ArgumentException("Query argument name cannot be null or empty.", nameof(values));
+            }
+
+            return $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}";
+        }));
+
+        if (string.IsNullOrEmpty(query))
         {
             return url;
         }
-
-        var query = string.Join("&", arguments.Select(argument =>
-        {
-            var name = argument.Item1?.ToString();
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                throw new ArgumentException("Query argument name cannot be null or empty.", nameof(arguments));
-            }
-
-            return $"{Uri.EscapeDataString(name)}={Uri.EscapeDataString(Convert.ToString(argument.Item2, CultureInfo.InvariantCulture) ?? string.Empty)}";
-        }));
 
         var separator = url.Contains('?', StringComparison.Ordinal)
             ? url.EndsWith('?') || url.EndsWith('&') ? string.Empty : "&"
@@ -146,6 +162,32 @@ public static class FluentHttpExtensions
         CancellationToken cancellation = default)
     {
         return httpClient.ReadJsonAsync<TOut>(url, HttpMethod.Get, cancellation);
+    }
+
+    public static Task<TOut> GetFromJsonAsync<TOut>(
+        this HttpClient httpClient,
+        string url,
+        object query,
+        CancellationToken cancellation = default)
+    {
+        return httpClient.GetFromJsonAsync<TOut>(url.Query(query), cancellation);
+    }
+
+    public static Task<TOut> GetFromJsonAsync<TOut>(
+        this HttpClient httpClient,
+        string url,
+        IReadOnlyDictionary<string, object?> query,
+        CancellationToken cancellation = default)
+    {
+        return httpClient.GetFromJsonAsync<TOut>(url.Query(query), cancellation);
+    }
+
+    public static Task<TOut> GetFromJsonAsync<TOut>(
+        this HttpClient httpClient,
+        string url,
+        params (string Key, object? Value)[] query)
+    {
+        return httpClient.GetFromJsonAsync<TOut>(url.Query(query));
     }
 
     public static Task<TOut> PostFromJsonAsync<TIn, TOut>(
@@ -296,5 +338,74 @@ public static class FluentHttpExtensions
         CancellationToken cancellation = default)
     {
         _ = await FluentHttpRequest.SendJsonAsync<string>(httpClient, url, method, null, cancellation);
+    }
+
+    private static IEnumerable<KeyValuePair<string, string>> ToQueryValues(object values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        if (values is IReadOnlyDictionary<string, object?> readOnlyDictionary)
+        {
+            return readOnlyDictionary.SelectMany(pair => CreateQueryPairs(pair.Key, pair.Value));
+        }
+
+        if (values is IEnumerable<KeyValuePair<string, object?>> objectPairs)
+        {
+            return objectPairs.SelectMany(pair => CreateQueryPairs(pair.Key, pair.Value));
+        }
+
+        if (values is IEnumerable<KeyValuePair<string, string?>> stringPairs)
+        {
+            return stringPairs.SelectMany(pair => CreateQueryPairs(pair.Key, pair.Value));
+        }
+
+        if (values is IEnumerable and not string)
+        {
+            throw new ArgumentException("Query values must be an object or key-value collection.", nameof(values));
+        }
+
+        return values
+            .GetType()
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(property => property.CanRead)
+            .SelectMany(property =>
+            {
+                var name = FluentHttpRequest.JsonOptions.PropertyNamingPolicy?.ConvertName(property.Name) ?? property.Name;
+                return CreateQueryPairs(name, property.GetValue(values));
+            });
+    }
+
+    private static IEnumerable<KeyValuePair<string, string>> CreateQueryPairs(string name, object? value)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Query argument name cannot be null or empty.", nameof(name));
+        }
+
+        if (value is IEnumerable values and not string)
+        {
+            foreach (var item in values)
+            {
+                yield return new KeyValuePair<string, string>(name, FormatQueryValue(item));
+            }
+
+            yield break;
+        }
+
+        yield return new KeyValuePair<string, string>(name, FormatQueryValue(value));
+    }
+
+    private static string FormatQueryValue(object? value)
+    {
+        return value switch
+        {
+            null => string.Empty,
+            DateOnly date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
+            DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
+            bool boolean => boolean.ToString().ToLowerInvariant(),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? string.Empty
+        };
     }
 }

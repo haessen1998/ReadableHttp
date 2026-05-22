@@ -12,6 +12,21 @@ public sealed class FluentJsonHttpClient : FluentHttpClientBase<FluentJsonHttpCl
         return SendAsync<TOut>(url, HttpMethod.Get, cancellation);
     }
 
+    public Task<TOut> GetAsync<TOut>(string url, object query, CancellationToken cancellation = default)
+    {
+        return GetAsync<TOut>(url.Query(query), cancellation);
+    }
+
+    public Task<TOut> GetAsync<TOut>(string url, IReadOnlyDictionary<string, object?> query, CancellationToken cancellation = default)
+    {
+        return GetAsync<TOut>(url.Query(query), cancellation);
+    }
+
+    public Task<TOut> GetAsync<TOut>(string url, params (string Key, object? Value)[] query)
+    {
+        return GetAsync<TOut>(url.Query(query));
+    }
+
     public Task<TOut> PostAsync<TIn, TOut>(string url, TIn body, CancellationToken cancellation = default)
     {
         return SendAsync<TIn, TOut>(url, HttpMethod.Post, body, cancellation);
@@ -30,6 +45,21 @@ public sealed class FluentJsonHttpClient : FluentHttpClientBase<FluentJsonHttpCl
     public Task<TOut> DeleteAsync<TOut>(string url, CancellationToken cancellation = default)
     {
         return SendAsync<TOut>(url, HttpMethod.Delete, cancellation);
+    }
+
+    public Task<TOut> DeleteAsync<TOut>(string url, object query, CancellationToken cancellation = default)
+    {
+        return DeleteAsync<TOut>(url.Query(query), cancellation);
+    }
+
+    public Task<TOut> DeleteAsync<TOut>(string url, IReadOnlyDictionary<string, object?> query, CancellationToken cancellation = default)
+    {
+        return DeleteAsync<TOut>(url.Query(query), cancellation);
+    }
+
+    public Task<TOut> DeleteAsync<TOut>(string url, params (string Key, object? Value)[] query)
+    {
+        return DeleteAsync<TOut>(url.Query(query));
     }
 
     public Task<TOut> SendAsync<TOut>(string url, HttpMethod method, CancellationToken cancellation = default)

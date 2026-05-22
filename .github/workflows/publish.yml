@@ -1,0 +1,38 @@
+name: Publish NuGet
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore FluentHttp.sln
+
+      - name: Build
+        run: dotnet build FluentHttp.sln --configuration Release --no-restore
+
+      - name: Pack FluentHttp.Json
+        run: dotnet pack FluentHttp.Json/FluentHttp.Json.csproj --configuration Release --no-build --output ./publish
+
+      - name: Pack FluentHttpFactory
+        run: dotnet pack FluentHttpFactory/FluentHttpFactory.csproj --configuration Release --no-build --output ./publish
+
+      - name: Publish to nuget.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push ./publish/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
