@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.7.11811.120 insiders
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentHttp.Json", "FluentHttp.Json\FluentHttp.Json.csproj", "{0645C077-B39F-4C03-B240-7655FB0240E1}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentHttpFactory", "FluentHttpFactory\FluentHttpFactory.csproj", "{A52B523C-F740-4FE0-AFF9-4A7D2DD32270}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0645C077-B39F-4C03-B240-7655FB0240E1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0645C077-B39F-4C03-B240-7655FB0240E1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0645C077-B39F-4C03-B240-7655FB0240E1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0645C077-B39F-4C03-B240-7655FB0240E1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A52B523C-F740-4FE0-AFF9-4A7D2DD32270}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A52B523C-F740-4FE0-AFF9-4A7D2DD32270}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A52B523C-F740-4FE0-AFF9-4A7D2DD32270}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A52B523C-F740-4FE0-AFF9-4A7D2DD32270}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {37DE250A-3764-4E5B-BAF0-A84927BA09A9}
+	EndGlobalSection
+EndGlobal

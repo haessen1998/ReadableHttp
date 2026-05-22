@@ -1,0 +1,30 @@
+# Build results
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# Logs and temporary files
+*.log
+*.tmp
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# OS files
+Thumbs.db
+.DS_Store
