@@ -32,14 +32,29 @@ public sealed class FluentJsonHttpClient : FluentHttpClientBase<FluentJsonHttpCl
         return SendAsync<TIn, TOut>(url, HttpMethod.Post, body, cancellation);
     }
 
+    public Task<TOut> PostAsync<TOut>(string url, object body, CancellationToken cancellation = default)
+    {
+        return SendAsync<TOut>(url, HttpMethod.Post, body, cancellation);
+    }
+
     public Task<TOut> PutAsync<TIn, TOut>(string url, TIn body, CancellationToken cancellation = default)
     {
         return SendAsync<TIn, TOut>(url, HttpMethod.Put, body, cancellation);
     }
 
+    public Task<TOut> PutAsync<TOut>(string url, object body, CancellationToken cancellation = default)
+    {
+        return SendAsync<TOut>(url, HttpMethod.Put, body, cancellation);
+    }
+
     public Task<TOut> PatchAsync<TIn, TOut>(string url, TIn body, CancellationToken cancellation = default)
     {
         return SendAsync<TIn, TOut>(url, HttpMethod.Patch, body, cancellation);
+    }
+
+    public Task<TOut> PatchAsync<TOut>(string url, object body, CancellationToken cancellation = default)
+    {
+        return SendAsync<TOut>(url, HttpMethod.Patch, body, cancellation);
     }
 
     public Task<TOut> DeleteAsync<TOut>(string url, CancellationToken cancellation = default)
@@ -77,6 +92,16 @@ public sealed class FluentJsonHttpClient : FluentHttpClientBase<FluentJsonHttpCl
             cancellation);
     }
 
+    public Task<TOut> SendAsync<TOut>(string url, HttpMethod method, object body, CancellationToken cancellation = default)
+    {
+        return FluentHttpRequest.SendJsonAsync<TOut>(
+            HttpClient,
+            url,
+            method,
+            FluentHttpRequest.CreateJsonContent(body),
+            cancellation);
+    }
+
     public IAsyncEnumerable<TOut> StreamAsync<TIn, TOut>(
         string url,
         HttpMethod method,
@@ -100,5 +125,14 @@ public sealed class FluentJsonHttpClient : FluentHttpClientBase<FluentJsonHttpCl
         CancellationToken cancellation = default)
     {
         return StreamAsync<TIn, TOut>(url, HttpMethod.Post, body, streamType, cancellation);
+    }
+
+    public IAsyncEnumerable<TOut> PostStreamAsync<TOut>(
+        string url,
+        object body,
+        string streamType = FluentHttpExtensions.EnumerableStream,
+        CancellationToken cancellation = default)
+    {
+        return StreamAsync<object, TOut>(url, HttpMethod.Post, body, streamType, cancellation);
     }
 }

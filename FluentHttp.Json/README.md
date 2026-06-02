@@ -30,7 +30,7 @@ var result = await jsonClient.GetAsync<Dictionary<string, object>>(
 ```
 
 ```CSharp
-var result = await jsonClient.PostAsync<object, string>(
+var result = await jsonClient.PostAsync<string>(
     url: "/hello".Query(new { key1 = value1, key2 = value2 }),
     body: new
     {
@@ -56,7 +56,7 @@ Query 也支持字典和具名元组：
 var formClient = FluentHttpClient.CreateForm("https://www.example.com")
     .AddBasicAuthentication("demo", "123456");
 
-var result = await formClient.PostAsync<object, string>(
+var result = await formClient.PostAsync<string>(
     url: "/login",
     body: new
     {
@@ -70,7 +70,7 @@ var result = await formClient.PostAsync<object, string>(
 ```CSharp
 var stream = FluentHttpClient.CreateJson("https://www.example.com", TimeSpan.FromMinutes(1))
     .AddBearerAuthentication("xx-xxx")
-    .PostStreamAsync<object, string>(
+    .PostStreamAsync<string>(
         url: "/chat",
         body: bodyArguments,
         streamType: FluentHttpExtensions.EventStream);
@@ -92,4 +92,4 @@ var jsonClient = FluentHttpClient.CreateJsonWithCookie(
 
 ## Compatibility
 
-原有的 `FluentHttpClient.Create()`、`ReadJsonAsync`、`ReadFormAsync`、`ReadStreamAsync`、`GetFromJsonAsync`、`PostFromJsonAsync` 等 `HttpClient` 扩展仍然可用。新项目建议优先使用 `CreateJson`、`CreateForm` 和 `Query`。
+原有的 `FluentHttpClient.Create()`、`ReadJsonAsync`、`ReadFormAsync`、`ReadStreamAsync`、`GetFromJsonAsync`、`PostFromJsonAsync` 等 `HttpClient` 扩展仍然可用。`PostAsync`、`PostFromJsonAsync`、`PostFromFormAsync` 和 `PostStreamAsync` 支持只指定响应类型，body 可以直接传匿名类或 `Dictionary`。新项目建议优先使用 `CreateJson`、`CreateForm` 和 `Query`。

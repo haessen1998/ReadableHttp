@@ -47,7 +47,7 @@ public class DemoService
 ```CSharp
 var formClient = fluentHttpFactory.CreateForm("example");
 
-var result = await formClient.PostAsync<object, string>(
+var result = await formClient.PostAsync<string>(
     url: "/login",
     body: new
     {

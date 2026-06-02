@@ -199,6 +199,15 @@ public static class FluentHttpExtensions
         return httpClient.ReadJsonAsync<TIn, TOut>(url, HttpMethod.Post, body, cancellation);
     }
 
+    public static Task<TOut> PostFromJsonAsync<TOut>(
+        this HttpClient httpClient,
+        string url,
+        object body,
+        CancellationToken cancellation = default)
+    {
+        return httpClient.ReadJsonAsync<TOut>(url, HttpMethod.Post, body, cancellation);
+    }
+
     public static Task<TOut> PostFromFormAsync<TIn, TOut>(
         this HttpClient httpClient,
         string url,
@@ -206,6 +215,15 @@ public static class FluentHttpExtensions
         CancellationToken cancellation = default)
     {
         return httpClient.ReadFormAsync<TIn, TOut>(url, HttpMethod.Post, body, cancellation);
+    }
+
+    public static Task<TOut> PostFromFormAsync<TOut>(
+        this HttpClient httpClient,
+        string url,
+        object body,
+        CancellationToken cancellation = default)
+    {
+        return httpClient.ReadFormAsync<TOut>(url, HttpMethod.Post, body, cancellation);
     }
 
     public static Task<TOut> ReadJsonAsync<TIn, TOut>(
@@ -329,6 +347,16 @@ public static class FluentHttpExtensions
         CancellationToken cancellation = default)
     {
         return httpClient.ReadStreamAsync<TIn, TOut>(url, HttpMethod.Post, body, streamType, cancellation);
+    }
+
+    public static IAsyncEnumerable<TOut> PostStreamAsync<TOut>(
+        this HttpClient httpClient,
+        string url,
+        object body,
+        string streamType = EnumerableStream,
+        CancellationToken cancellation = default)
+    {
+        return httpClient.ReadStreamAsync<TOut>(url, HttpMethod.Post, body, streamType, cancellation);
     }
 
     public static async Task SendJsonAsync(
