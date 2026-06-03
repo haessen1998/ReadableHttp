@@ -56,4 +56,38 @@ public sealed class FluentFormHttpClient : FluentHttpClientBase<FluentFormHttpCl
             FluentHttpRequest.CreateFormContent(body),
             cancellation);
     }
+
+    public IAsyncEnumerable<TOut> StreamAsync<TIn, TOut>(
+        string url,
+        HttpMethod method,
+        TIn body,
+        string streamType = FluentHttpExtensions.EnumerableStream,
+        CancellationToken cancellation = default)
+    {
+        return FluentHttpRequest.SendStreamAsync<TOut>(
+            HttpClient,
+            url,
+            method,
+            FluentHttpRequest.CreateFormContent(body),
+            streamType,
+            cancellation);
+    }
+
+    public IAsyncEnumerable<TOut> PostStreamAsync<TIn, TOut>(
+        string url,
+        TIn body,
+        string streamType = FluentHttpExtensions.EnumerableStream,
+        CancellationToken cancellation = default)
+    {
+        return StreamAsync<TIn, TOut>(url, HttpMethod.Post, body, streamType, cancellation);
+    }
+
+    public IAsyncEnumerable<TOut> PostStreamAsync<TOut>(
+        string url,
+        object body,
+        string streamType = FluentHttpExtensions.EnumerableStream,
+        CancellationToken cancellation = default)
+    {
+        return StreamAsync<object, TOut>(url, HttpMethod.Post, body, streamType, cancellation);
+    }
 }

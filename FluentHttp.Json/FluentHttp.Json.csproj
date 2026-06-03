@@ -8,7 +8,7 @@
 	<Authors>Haessen</Authors>
 	<Description>Fluent Http Client.</Description>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
-	<PackageVersion>1.2.1</PackageVersion>
+	<PackageVersion>1.2.2</PackageVersion>
   </PropertyGroup>
 	
   <ItemGroup>

@@ -81,6 +81,25 @@ await foreach (var message in stream)
 }
 ```
 
+## Streaming Form
+
+```CSharp
+var stream = FluentHttpClient.CreateForm("https://www.example.com", TimeSpan.FromMinutes(1))
+    .PostStreamAsync<string>(
+        url: "/events",
+        body: new
+        {
+            UserName = "demo",
+            Token = "xxxxx"
+        },
+        streamType: FluentHttpExtensions.EventStream);
+
+await foreach (var message in stream)
+{
+    Console.WriteLine(message);
+}
+```
+
 ## Cookie
 
 ```CSharp
