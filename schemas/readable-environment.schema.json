@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.readablehttp.dev/readable-environment.schema.json",
+  "title": "ReadableHttp Environment",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/variable"
+      },
+      "default": {}
+    }
+  },
+  "required": [
+    "name",
+    "variables"
+  ],
+  "$defs": {
+    "variable": {
+      "oneOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "object",
+            "array",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "value": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "object",
+                "array",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "string",
+                "number",
+                "boolean",
+                "json"
+              ],
+              "default": "string"
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

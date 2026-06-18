@@ -1,0 +1,10 @@
+{
+  "name": "httpbin",
+  "variables": {
+    "baseUrl": "https://httpbin.org",
+    "basicUser": "demo",
+    "basicPassword": "secret",
+    "bearerToken": "sample-token",
+    "apiKey": "sample-api-key"
+  }
+}

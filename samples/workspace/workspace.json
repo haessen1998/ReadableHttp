@@ -1,0 +1,28 @@
+{
+  "id": "1b1b3855d944426faa6c34dae1da7a95",
+  "name": "ReadableHttp Example Workspace",
+  "type": "local",
+  "git": null,
+  "collections": [
+    {
+      "id": "a0d3f948583b4a9abcfa89d4e6cfcac8",
+      "name": "HTTPBin Examples",
+      "sourceType": "local",
+      "remote": null,
+      "requests": []
+    },
+    {
+      "id": "656404ad44be45a9860a7c3f7cb25fb7",
+      "name": "Remote OpenAPI Example",
+      "sourceType": "remoteEndpoint",
+      "remote": {
+        "endpoint": "https://httpbin.org/json",
+        "method": "GET",
+        "headers": [],
+        "lastRefreshedAt": null
+      },
+      "requests": []
+    }
+  ],
+  "environments": []
+}

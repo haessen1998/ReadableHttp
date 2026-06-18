@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Authors>Haessen</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>http;api;rest;openapi;cli;sdk</PackageTags>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;.artifacts\**;.build\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)schemas\**\*.json" Pack="true" PackagePath="schemas\" />
+  </ItemGroup>
+</Project>

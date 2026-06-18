@@ -1,0 +1,10 @@
+{
+  "name": "Basic auth",
+  "method": "GET",
+  "url": "{{baseUrl}}/basic-auth/{{basicUser}}/{{basicPassword}}",
+  "auth": {
+    "type": "basic",
+    "username": "{{basicUser}}",
+    "password": "{{basicPassword}}"
+  }
+}

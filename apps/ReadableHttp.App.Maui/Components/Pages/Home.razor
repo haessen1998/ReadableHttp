@@ -1,0 +1,612 @@
+@page "/"
+@using ReadableHttp.Core
+@using ReadableHttp.Execution
+@using ReadableHttp.Storage
+@using ReadableHttp.Try
+@inject AppSettingsStore SettingsStore
+@inject AppFilePicker FilePicker
+
+<PageTitle>ReadableHttp</PageTitle>
+
+<main class="desktop-shell @(darkMode ? "theme-dark" : "theme-light")">
+    <header class="menu-bar">
+        <div class="window-chrome">
+            <button class="chrome-button" title="Toggle sidebar" @onclick="ToggleExplorer">□</button>
+            <span class="brand-mark">ReadableHttp</span>
+        </div>
+        <nav class="app-menus" aria-label="Application menu">
+            <button @onclick="InitializeWorkspaceAsync">文件</button>
+            <button @onclick="NewScratchRequest">编辑</button>
+            <button @onclick="ToggleInspector">视图</button>
+            <button @onclick="ShowHelp">帮助</button>
+        </nav>
+        <div class="top-actions">
+            <FluentButton Appearance="Appearance.Neutral" @onclick="PickWorkspaceAsync">打开工作区</FluentButton>
+            <FluentButton Appearance="Appearance.Accent" @onclick="LoadWorkspaceAsync">加载</FluentButton>
+        </div>
+    </header>
+
+    <section class="workspace-frame">
+        <aside class="activity-rail" aria-label="Primary actions">
+            <button class="@RailClass("request")" title="New request" @onclick="NewScratchRequest">
+                <span>+</span>
+                <small>请求</small>
+            </button>
+            <button class="@RailClass("collection")" title="New collection" @onclick="NewCollection">
+                <span>▣</span>
+                <small>集合</small>
+            </button>
+            <button class="@RailClass("import")" title="Import" @onclick="PickTryFileAsync">
+                <span>↧</span>
+                <small>导入</small>
+            </button>
+            <button class="@RailClass("spec")" title="API specs" @onclick="ShowSpecs">
+                <span>{ }</span>
+                <small>Spec</small>
+            </button>
+            <button class="@RailClass("settings")" title="Settings" @onclick="ShowSettings">
+                <span>⚙</span>
+                <small>设置</small>
+            </button>
+        </aside>
+
+        @if (showExplorer)
+        {
+            <aside class="explorer-pane">
+                <section class="workspace-summary">
+                    <div class="pane-title">工作区</div>
+                    <FluentTextField @bind-Value="workspacePath" />
+                    <div class="quick-actions">
+                        <FluentButton @onclick="InitializeWorkspaceAsync">初始化示例</FluentButton>
+                        <FluentButton @onclick="GitStatusAsync" Disabled="@(!IsGitWorkspace)">状态</FluentButton>
+                        <FluentButton @onclick="GitPullAsync" Disabled="@(!IsGitWorkspace)">拉取</FluentButton>
+                        <FluentButton @onclick="GitPushAsync" Disabled="@(!IsGitWorkspace)">推送</FluentButton>
+                    </div>
+                    <div class="subtle single-line">@workspaceStatus</div>
+                </section>
+
+                <section class="tree-section">
+                    <div class="section-heading">
+                        <span>Collections</span>
+                        <button title="New collection" @onclick="NewCollection">+</button>
+                    </div>
+                    @if (collections.Count == 0)
+                    {
+                        <div class="empty-state">尚未加载 collection</div>
+                    }
+                    else
+                    {
+                        <div class="tree-list">
+                            @foreach (var collection in collections)
+                            {
+                                <button class="@CollectionClass(collection)" @onclick="() => SelectCollection(collection)">
+                                    <span class="tree-icon">▱</span>
+                                    <span class="tree-label">@collection.Name</span>
+                                    <small>@collection.SourceType</small>
+                                </button>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="tree-section">
+                    <div class="section-heading">
+                        <span>API Specs</span>
+                        <button title="Open API spec" @onclick="PickTryFileAsync">+</button>
+                    </div>
+                    <div class="tree-list">
+                        @foreach (var spec in specFiles)
+                        {
+                            <button class="@SpecClass(spec)" @onclick="() => SelectSpec(spec)">
+                                <span class="tree-icon">◇</span>
+                                <span class="tree-label">@Path.GetFileName(spec)</span>
+                            </button>
+                        }
+                    </div>
+                </section>
+
+                <section class="tree-section">
+                    <div class="section-heading">
+                        <span>会话</span>
+                    </div>
+                    <div class="tree-list">
+                        @foreach (var item in recentSessions)
+                        {
+                            <button class="tree-row compact" @onclick="() => SelectSession(item)">
+                                <span class="tree-icon">□</span>
+                                <span class="tree-label">@item</span>
+                            </button>
+                        }
+                    </div>
+                </section>
+            </aside>
+        }
+
+        <section class="content-stage">
+            <header class="document-tabs">
+                <button class="@TabClass("request")" @onclick="ShowRequest">请求</button>
+                <button class="@TabClass("preview")" @onclick="ShowPreview">Swagger 预览</button>
+                <button class="@TabClass("raw")" @onclick="ShowRaw">原始文件</button>
+                <div class="document-title">
+                    <span>@activeSource</span>
+                    <strong>@documentTitle</strong>
+                </div>
+            </header>
+
+            @if (viewMode == "raw")
+            {
+                <pre class="raw-view">@rawContent</pre>
+            }
+            else if (viewMode == "preview")
+            {
+                <div class="spec-preview">
+                    <header class="preview-header">
+                        <div>
+                            <div class="eyebrow">API Designer</div>
+                            <h1>@documentTitle</h1>
+                        </div>
+                        <FluentButton Appearance="Appearance.Accent" @onclick="LoadTryDocumentAsync">转换并预览</FluentButton>
+                    </header>
+                    <div class="operation-list">
+                        @foreach (var operation in operations)
+                        {
+                            <button class="operation-row" @onclick="() => SelectOperation(operation)">
+                                <span class="method @operation.Method.ToLowerInvariant()">@operation.Method</span>
+                                <span class="operation-path">@operation.Path</span>
+                                <span class="operation-name">@operation.Name</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <section class="request-editor">
+                    <div class="request-bar">
+                        <FluentSelect TOption="string" @bind-Value="method">
+                            <FluentOption TOption="string" Value="GET">GET</FluentOption>
+                            <FluentOption TOption="string" Value="POST">POST</FluentOption>
+                            <FluentOption TOption="string" Value="PUT">PUT</FluentOption>
+                            <FluentOption TOption="string" Value="PATCH">PATCH</FluentOption>
+                            <FluentOption TOption="string" Value="DELETE">DELETE</FluentOption>
+                        </FluentSelect>
+                        <FluentTextField @bind-Value="url" />
+                        <FluentButton Appearance="Appearance.Accent" @onclick="SendAsync" Disabled="@isSending">Send</FluentButton>
+                    </div>
+
+                    <div class="editor-tabs">
+                        <button class="active">Body</button>
+                        <button>Headers</button>
+                        <button>Auth</button>
+                        <button>Vars</button>
+                        <button>Tests</button>
+                    </div>
+
+                    <div class="request-body-grid">
+                        <section>
+                            <h2>Request Body</h2>
+                            <textarea @bind="bodyText"></textarea>
+                        </section>
+                        <section>
+                            <h2>Response</h2>
+                            <div class="response-meta">@statusText</div>
+                            <pre>@responseText</pre>
+                        </section>
+                    </div>
+                </section>
+            }
+        </section>
+
+        @if (showInspector)
+        {
+            <aside class="inspector-pane">
+                <section class="inspector-section">
+                    <div class="inspector-title">
+                        <span>环境信息</span>
+                        <button title="Settings" @onclick="ShowSettings">⚙</button>
+                    </div>
+                    <dl>
+                        <div>
+                            <dt>Workspace</dt>
+                            <dd>@(workspace?.Name ?? "未加载")</dd>
+                        </div>
+                        <div>
+                            <dt>Type</dt>
+                            <dd>@(workspace?.Type.ToString() ?? "Local")</dd>
+                        </div>
+                        <div>
+                            <dt>Branch</dt>
+                            <dd>@(IsGitWorkspace ? workspace?.Git?.Branch ?? "main" : "本地")</dd>
+                        </div>
+                        <div>
+                            <dt>Proxy</dt>
+                            <dd>@(useSystemProxy ? "System" : "None")</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section class="inspector-section">
+                    <div class="inspector-title">
+                        <span>导入 / 导出</span>
+                    </div>
+                    <FluentTextField @bind-Value="tryFilePath" />
+                    <div class="quick-actions">
+                        <FluentButton @onclick="PickTryFileAsync">选择文件</FluentButton>
+                        <FluentButton Appearance="Appearance.Accent" @onclick="LoadTryDocumentAsync">导入预览</FluentButton>
+                    </div>
+                    <div class="subtle">OpenAPI, Swagger, .http, curl, request JSON</div>
+                </section>
+
+                <section class="inspector-section">
+                    <div class="inspector-title">
+                        <span>History</span>
+                    </div>
+                    <div class="history-list">
+                        @foreach (var entry in activityLog)
+                        {
+                            <div class="history-row">
+                                <strong>@entry.Title</strong>
+                                <span>@entry.Detail</span>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                <section class="inspector-section settings-strip">
+                    <label>
+                        <input type="checkbox" @bind="darkMode" />
+                        深色模式
+                    </label>
+                    <label>
+                        <input type="checkbox" @bind="useSystemProxy" />
+                        本地网络代理
+                    </label>
+                    <label>
+                        <input type="checkbox" @bind="devToolsEnabled" />
+                        WebView 开发者工具
+                    </label>
+                    <FluentSelect TOption="string" Label="语言" @bind-Value="language">
+                        <FluentOption TOption="string" Value="system">System</FluentOption>
+                        <FluentOption TOption="string" Value="zh-CN">简体中文</FluentOption>
+                        <FluentOption TOption="string" Value="en-US">English</FluentOption>
+                    </FluentSelect>
+                    <FluentButton @onclick="SaveSettings">保存设置</FluentButton>
+                </section>
+            </aside>
+        }
+    </section>
+</main>
+
+@code {
+    private string workspacePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ReadableHttp Workspace");
+    private string workspaceStatus = "No workspace loaded";
+    private string tryFilePath = "samples/openapi/httpbin.openapi.json";
+    private string activeSource = "Request";
+    private string activeRail = "request";
+    private string documentTitle = "Scratch Request";
+    private string rawContent = string.Empty;
+    private string viewMode = "request";
+    private string method = "GET";
+    private string url = "https://httpbin.org/get";
+    private string bodyText = string.Empty;
+    private string statusText = "Ready";
+    private string responseText = string.Empty;
+    private string language = "system";
+    private bool darkMode;
+    private bool useSystemProxy = true;
+    private bool devToolsEnabled = true;
+    private bool isSending;
+    private bool showExplorer = true;
+    private bool showInspector = true;
+    private ReadableWorkspace? workspace;
+    private ReadableCollection? selectedCollection;
+    private List<ReadableCollection> collections = [];
+    private List<ReadableTryOperation> operations = [];
+    private List<string> specFiles = [];
+    private List<string> recentSessions = ["Scratch Request"];
+    private List<ActivityEntry> activityLog = [new("Ready", "等待加载 workspace 或导入文件")];
+
+    private bool IsGitWorkspace => workspace?.Type == ReadableWorkspaceType.Git;
+
+    protected override void OnInitialized()
+    {
+        var settings = SettingsStore.Load();
+        workspacePath = settings.WorkspacePath;
+        tryFilePath = string.IsNullOrWhiteSpace(settings.TryFilePath)
+            ? tryFilePath
+            : settings.TryFilePath;
+        language = settings.Language;
+        darkMode = settings.DarkMode;
+        useSystemProxy = settings.UseSystemProxy;
+        devToolsEnabled = settings.DevToolsEnabled;
+        AddSpecFile(tryFilePath);
+    }
+
+    private async Task InitializeWorkspaceAsync()
+    {
+        await new ReadableWorkspaceStore().InitializeExampleAsync(workspacePath, overwrite: true);
+        workspaceStatus = $"Initialized: {workspacePath}";
+        AddActivity("Workspace", "已初始化示例工作区");
+        await LoadWorkspaceAsync();
+    }
+
+    private async Task LoadWorkspaceAsync()
+    {
+        workspace = await new ReadableWorkspaceStore().LoadWorkspaceAsync(workspacePath);
+        collections = workspace.Collections;
+        selectedCollection = collections.FirstOrDefault();
+        workspaceStatus = $"Loaded: {workspace.Name}";
+        AddActivity("Workspace", workspaceStatus);
+        SaveSettings();
+    }
+
+    private async Task LoadTryDocumentAsync()
+    {
+        var document = await new ReadableTryDocumentLoader().LoadAsync(tryFilePath);
+        activeSource = document.SourceType.ToString();
+        documentTitle = document.Title ?? document.FileName ?? "Try Document";
+        rawContent = document.RawContent;
+        operations = document.Operations;
+        viewMode = "preview";
+        activeRail = "spec";
+        AddSpecFile(tryFilePath);
+        AddActivity("Import", $"已转换 {operations.Count} 个 operation");
+
+        if (operations.Count > 0)
+        {
+            SelectOperation(operations[0]);
+        }
+
+        SaveSettings();
+    }
+
+    private async Task PickWorkspaceAsync()
+    {
+        var path = await FilePicker.PickWorkspaceAsync();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            workspacePath = path;
+            SaveSettings();
+        }
+    }
+
+    private async Task PickTryFileAsync()
+    {
+        activeRail = "import";
+        var path = await FilePicker.PickTryFileAsync();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            tryFilePath = path;
+            AddSpecFile(path);
+            SaveSettings();
+        }
+    }
+
+    private void SelectCollection(ReadableCollection collection)
+    {
+        activeRail = "collection";
+        selectedCollection = collection;
+        documentTitle = collection.Name;
+        activeSource = collection.SourceType.ToString();
+        AddSession(collection.Name);
+    }
+
+    private async Task RefreshCollectionAsync()
+    {
+        if (selectedCollection is null)
+        {
+            return;
+        }
+
+        var requests = await new ReadableRemoteCollectionRefresher().RefreshAsync(workspacePath, selectedCollection);
+        operations = requests.Select(request => new ReadableTryOperation
+        {
+            Id = request.Id,
+            Name = request.Name,
+            Method = request.Method,
+            Path = request.Url,
+            Request = request
+        }).ToList();
+        workspaceStatus = $"Refreshed {requests.Count} requests from {selectedCollection.Name}";
+        viewMode = "preview";
+        AddActivity("Collection", workspaceStatus);
+    }
+
+    private async Task GitStatusAsync()
+    {
+        workspaceStatus = await new ReadableWorkspaceGitService().StatusAsync(workspacePath);
+        AddActivity("Git status", FirstLine(workspaceStatus));
+    }
+
+    private async Task GitPullAsync()
+    {
+        workspaceStatus = await new ReadableWorkspaceGitService().PullAsync(workspacePath);
+        AddActivity("Git pull", FirstLine(workspaceStatus));
+    }
+
+    private async Task GitPushAsync()
+    {
+        workspaceStatus = await new ReadableWorkspaceGitService().PushAsync(workspacePath);
+        AddActivity("Git push", FirstLine(workspaceStatus));
+    }
+
+    private void SaveSettings()
+    {
+        SettingsStore.Save(new AppSettings
+        {
+            WorkspacePath = workspacePath,
+            TryFilePath = tryFilePath,
+            Language = language,
+            DarkMode = darkMode,
+            UseSystemProxy = useSystemProxy,
+            DevToolsEnabled = devToolsEnabled
+        });
+        AddActivity("Settings", "配置已保存");
+    }
+
+    private void SelectOperation(ReadableTryOperation operation)
+    {
+        activeRail = "request";
+        method = operation.Request.Method;
+        url = operation.Request.Url;
+        bodyText = operation.Request.Body?.Content ?? string.Empty;
+        documentTitle = operation.Name;
+        activeSource = "Operation";
+        viewMode = "request";
+        AddSession(operation.Name);
+    }
+
+    private async Task SendAsync()
+    {
+        isSending = true;
+        statusText = "Sending...";
+        responseText = string.Empty;
+
+        try
+        {
+            var request = new ReadableRequest
+            {
+                Method = method,
+                Url = url,
+                Body = string.IsNullOrWhiteSpace(bodyText)
+                    ? null
+                    : new ReadableBody
+                    {
+                        Type = ReadableBodyType.Json,
+                        ContentType = "application/json",
+                        Content = bodyText
+                    }
+            };
+
+            var exchange = await new ReadableHttpExecutor().SendAsync(request);
+            statusText = exchange.Error is not null
+                ? $"ERROR {exchange.Error.Type}"
+                : $"HTTP {exchange.Response?.StatusCode} {exchange.Response?.ReasonPhrase}";
+            responseText = exchange.Error?.Message
+                ?? exchange.Response?.BodyText
+                ?? "<binary or empty response>";
+            AddActivity(method, $"{statusText} {url}");
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+
+    private void NewScratchRequest()
+    {
+        activeRail = "request";
+        activeSource = "Request";
+        documentTitle = "Scratch Request";
+        method = "GET";
+        url = "https://httpbin.org/get";
+        bodyText = string.Empty;
+        responseText = string.Empty;
+        statusText = "Ready";
+        viewMode = "request";
+        AddSession(documentTitle);
+    }
+
+    private void NewCollection()
+    {
+        activeRail = "collection";
+        var collection = new ReadableCollection
+        {
+            Name = $"New Collection {collections.Count + 1}",
+            SourceType = ReadableCollectionSourceType.Local
+        };
+        collections.Add(collection);
+        SelectCollection(collection);
+        AddActivity("Collection", $"已创建 {collection.Name}");
+    }
+
+    private void SelectSpec(string path)
+    {
+        activeRail = "spec";
+        tryFilePath = path;
+        documentTitle = Path.GetFileName(path);
+        activeSource = "API Spec";
+        viewMode = string.IsNullOrWhiteSpace(rawContent) ? "preview" : viewMode;
+    }
+
+    private void SelectSession(string title)
+    {
+        documentTitle = title;
+        activeSource = title.Contains("Collection", StringComparison.OrdinalIgnoreCase) ? "Collection" : "Session";
+    }
+
+    private void AddSpecFile(string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && !specFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
+        {
+            specFiles.Insert(0, path);
+        }
+    }
+
+    private void AddSession(string title)
+    {
+        recentSessions.RemoveAll(item => string.Equals(item, title, StringComparison.OrdinalIgnoreCase));
+        recentSessions.Insert(0, title);
+        if (recentSessions.Count > 8)
+        {
+            recentSessions.RemoveAt(recentSessions.Count - 1);
+        }
+    }
+
+    private void AddActivity(string title, string detail)
+    {
+        activityLog.Insert(0, new ActivityEntry(title, detail));
+        if (activityLog.Count > 8)
+        {
+            activityLog.RemoveAt(activityLog.Count - 1);
+        }
+    }
+
+    private static string FirstLine(string value)
+    {
+        return value.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? value;
+    }
+
+    private void ShowRaw() => viewMode = "raw";
+
+    private void ShowPreview() => viewMode = "preview";
+
+    private void ShowRequest() => viewMode = "request";
+
+    private void ShowSpecs()
+    {
+        activeRail = "spec";
+        viewMode = "preview";
+    }
+
+    private void ShowSettings()
+    {
+        activeRail = "settings";
+        showInspector = true;
+    }
+
+    private void ShowHelp()
+    {
+        AddActivity("Help", "ReadableHttp MVP: workspace, collection, API spec, try, history");
+    }
+
+    private void ToggleExplorer() => showExplorer = !showExplorer;
+
+    private void ToggleInspector() => showInspector = !showInspector;
+
+    private string RailClass(string key) => activeRail == key ? "rail-button active" : "rail-button";
+
+    private string TabClass(string key) => viewMode == key ? "active" : string.Empty;
+
+    private string CollectionClass(ReadableCollection collection)
+    {
+        return ReferenceEquals(selectedCollection, collection) ? "tree-row active" : "tree-row";
+    }
+
+    private string SpecClass(string path)
+    {
+        return string.Equals(tryFilePath, path, StringComparison.OrdinalIgnoreCase) ? "tree-row active" : "tree-row";
+    }
+
+    private sealed record ActivityEntry(string Title, string Detail);
+}

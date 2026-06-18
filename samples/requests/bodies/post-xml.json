@@ -1,0 +1,17 @@
+{
+  "name": "POST XML body",
+  "method": "POST",
+  "url": "{{baseUrl}}/post",
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true
+    }
+  ],
+  "body": {
+    "type": "xml",
+    "contentType": "application/xml",
+    "content": "<request><name>ReadableHttp</name><kind>xml</kind></request>"
+  }
+}

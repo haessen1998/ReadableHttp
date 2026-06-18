@@ -1,0 +1,9 @@
+{
+  "id": "bb33fa98866e467ca378bc5f1e719536",
+  "name": "dev",
+  "variables": {
+    "baseUrl": "https://httpbin.org",
+    "keyword": "readable-http",
+    "apiKey": "sample-api-key"
+  }
+}

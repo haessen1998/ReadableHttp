@@ -1,0 +1,27 @@
+{
+  "name": "POST form-urlencoded body",
+  "method": "POST",
+  "url": "{{baseUrl}}/post",
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true
+    }
+  ],
+  "body": {
+    "type": "formUrlEncoded",
+    "form": [
+      {
+        "name": "username",
+        "value": "demo",
+        "enabled": true
+      },
+      {
+        "name": "password",
+        "value": "secret",
+        "enabled": true
+      }
+    ]
+  }
+}

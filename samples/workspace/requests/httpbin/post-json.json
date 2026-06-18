@@ -1,0 +1,33 @@
+{
+  "id": "6ed55273ddc6444db9f72672a6058164",
+  "name": "post-json",
+  "method": "POST",
+  "url": "{{baseUrl}}/post",
+  "pathParameters": [],
+  "query": [],
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true,
+      "description": null
+    }
+  ],
+  "body": {
+    "type": "json",
+    "content": "{\n  \u0022name\u0022: \u0022ReadableHttp\u0022,\n  \u0022source\u0022: \u0022example-workspace\u0022\n}",
+    "contentType": "application/json",
+    "filePath": null,
+    "form": [],
+    "multipart": []
+  },
+  "auth": null,
+  "options": {
+    "timeout": null,
+    "followRedirects": null,
+    "useCookies": null,
+    "ignoreSslErrors": null,
+    "proxy": null
+  },
+  "variables": {}
+}

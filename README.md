@@ -1,161 +1,125 @@
-# FluentHttp
+# ReadableHttp
 
-一个轻量的 `HttpClient` fluent 封装，用于更清晰地创建 JSON、Form 请求客户端，并通过 `IHttpClientFactory` 接入依赖注入。
+ReadableHttp is a .NET-first HTTP toolkit for readable SDK calls, raw request execution, and future API-client workflows.
 
-## Packages
+The first migration splits the old `FluentHttp.Json` package into a small set of focused projects:
 
-```CSharp
-dotnet add package FluentHttp.Json
-dotnet add package FluentHttpFactory
+- `apps/ReadableHttp.App.Maui`: MAUI Blazor Hybrid desktop app shell.
+- `ReadableHttp.Core`: JSON-serializable request, response, exchange, auth, environment, collection, and workspace models.
+- `ReadableHttp.Execution`: raw execution engine that preserves complete responses, including non-2xx responses.
+- `ReadableHttp`: fluent SDK surface for direct code usage.
+- `ReadableHttp.Storage`: JSON load/save helpers for request and workspace files.
+- `ReadableHttp.AspNetCore`: `IHttpClientFactory` and DI integration.
+- `ReadableHttp.Cli`: command-line request execution.
+
+## SDK
+
+```csharp
+using ReadableHttp;
+
+var exchange = await ReadableHttpClient
+    .Request("https://api.example.com/users")
+    .Get()
+    .WithBearerToken(token)
+    .SendExchangeAsync();
 ```
 
-`FluentHttp.Json` 提供 JSON/Form 专用客户端和 `HttpClient` 扩展方法。
+For business-code style calls, use `SendAsync<T>()`:
 
-`FluentHttpFactory` 提供基于 `IHttpClientFactory` 的创建器，适合 ASP.NET Core / Worker Service 等 DI 场景。
+```csharp
+using ReadableHttp;
 
-## JSON Client
-
-```CSharp
-var jsonClient = FluentHttpClient.CreateJson("https://www.example.com", TimeSpan.FromMinutes(1))
-    .AddBearerAuthentication("xx-xxx")
-    .AddHeaders(("X-App", "demo"));
-
-var result = await jsonClient.GetAsync<Dictionary<string, object>>("/hello");
+var user = await ReadableHttpClient
+    .Request("https://api.example.com/users/1")
+    .Get()
+    .SendAsync<UserDto>();
 ```
 
-### Query
+Streaming APIs such as Server-Sent Events can be consumed without buffering the full response:
 
-```CSharp
-var result = await jsonClient.GetAsync<Dictionary<string, object>>(
-    url: "/hello",
-    query: new
-    {
-        page = 1,
-        size = 20,
-        keyword = "demo"
-    });
-```
+```csharp
+using ReadableHttp;
+using ReadableHttp.Core;
 
-```CSharp
-"/hello".Query(new Dictionary<string, object?>
+await foreach (var message in ReadableHttpClient
+    .Request("https://api.example.com/chat")
+    .Post()
+    .WithJsonBody(new { query = "hello", response_mode = "streaming" })
+    .StreamAsync())
 {
-    ["page"] = 1,
-    ["tags"] = new[] { "a", "b" }
-});
-
-"/hello".Query(("page", 1), ("size", 20));
-```
-
-### POST JSON
-
-```CSharp
-var result = await jsonClient.PostAsync<string>(
-    url: "/hello".Query(new { key1 = value1, key2 = value2 }),
-    body: new
+    if (message.Type == ReadableStreamMessageType.Data)
     {
-        Question = "今天天气怎么样"
-    });
-```
-
-## Form Client
-
-```CSharp
-var formClient = FluentHttpClient.CreateForm("https://www.example.com")
-    .AddBasicAuthentication("demo", "123456");
-
-var result = await formClient.PostAsync<string>(
-    url: "/login",
-    body: new
-    {
-        UserName = "demo",
-        Password = "123456"
-    });
-```
-
-## Streaming JSON
-
-```CSharp
-var stream = FluentHttpClient.CreateJson("https://www.example.com", TimeSpan.FromMinutes(1))
-    .AddBearerAuthentication("xx-xxx")
-    .PostStreamAsync<string>(
-        url: "/chat",
-        body: bodyArguments,
-        streamType: FluentHttpExtensions.EventStream);
-
-await foreach (var message in stream)
-{
-    Console.WriteLine(message);
-}
-```
-
-## Streaming Form
-
-```CSharp
-var stream = FluentHttpClient.CreateForm("https://www.example.com", TimeSpan.FromMinutes(1))
-    .PostStreamAsync<string>(
-        url: "/events",
-        body: new
-        {
-            UserName = "demo",
-            Token = "xxxxx"
-        },
-        streamType: FluentHttpExtensions.EventStream);
-
-await foreach (var message in stream)
-{
-    Console.WriteLine(message);
-}
-```
-
-## Cookie
-
-```CSharp
-var jsonClient = FluentHttpClient.CreateJsonWithCookie(
-    baseUrl: "https://www.example.com",
-    timeout: TimeSpan.FromMinutes(1),
-    ("session", "xxxxx"));
-```
-
-## Dependency Injection
-
-```CSharp
-builder.Services.AddFluentHttpFactory();
-
-builder.Services.AddHttpClient("example", client =>
-{
-    client.BaseAddress = new Uri("https://www.example.com");
-    client.Timeout = TimeSpan.FromMinutes(1);
-});
-```
-
-```CSharp
-public class DemoService
-{
-    private readonly IFluentHttpFactory _fluentHttpFactory;
-
-    public DemoService(IFluentHttpFactory fluentHttpFactory)
-    {
-        _fluentHttpFactory = fluentHttpFactory;
-    }
-
-    public async Task<Dictionary<string, object>> GetAsync()
-    {
-        var jsonClient = _fluentHttpFactory.CreateJson("example")
-            .AddBearerAuthentication("xx-xxx");
-
-        return await jsonClient.GetAsync<Dictionary<string, object>>("/hello");
+        Console.WriteLine(message.Data);
     }
 }
 ```
 
-需要原生能力时，也可以继续使用：
+## Request JSON
 
-```CSharp
-var httpClient = fluentHttpFactory.Create("example");
+```json
+{
+  "schemaVersion": "1.0",
+  "name": "Get user",
+  "method": "GET",
+  "url": "{{baseUrl}}/users/{{userId}}",
+  "headers": [
+    { "name": "accept", "value": "application/json", "enabled": true }
+  ],
+  "auth": {
+    "type": "bearer",
+    "token": "{{token}}"
+  }
+}
 ```
 
-## Compatibility
+## Environment JSON
 
-原有的 `FluentHttpClient.Create()`、`ReadJsonAsync`、`ReadFormAsync`、`ReadStreamAsync`、`GetFromJsonAsync`、`PostFromJsonAsync` 等 `HttpClient` 扩展仍然可用。
+```json
+{
+  "schemaVersion": "1.0",
+  "name": "dev",
+  "variables": {
+    "baseUrl": "https://api.example.com",
+    "userId": "1",
+    "token": "local-token"
+  }
+}
+```
 
-`PostAsync`、`PostFromJsonAsync`、`PostFromFormAsync` 和 `PostStreamAsync` 支持只指定响应类型，body 可以直接传匿名类或 `Dictionary`。
+Stable JSON schemas for request, environment, and workspace files are published under `schemas/` and are included in the NuGet packages. Existing files without `schemaVersion` still load; newly saved files use the current format version.
+
+## CLI
+
+```shell
+dotnet run --project src/ReadableHttp.Cli -- send ./requests/get-user.json --env ./environments/dev.json
+```
+
+Useful CLI options:
+
+```shell
+dotnet run --project src/ReadableHttp.Cli -- send samples/requests/basic/get-with-query.json --env samples/environments/httpbin.json --header x-demo=true --output exchange.json
+dotnet run --project src/ReadableHttp.Cli -- stream samples/requests/streaming/get-lines.json --env samples/environments/httpbin.json --format lines
+dotnet run --project src/ReadableHttp.Cli -- try samples/openapi/httpbin.openapi.json --operation getAnything --var keyword=openapi
+dotnet run --project src/ReadableHttp.Cli -- trydoc samples/openapi/httpbin.openapi.json
+dotnet run --project src/ReadableHttp.Cli -- trydoc samples/http/httpbin.http
+dotnet run --project src/ReadableHttp.Cli -- send --workspace samples/workspace --request get-with-query --env dev
+dotnet run --project src/ReadableHttp.Cli -- init ./my-workspace
+dotnet run --project src/ReadableHttp.Cli -- import http samples/http/httpbin.http --output samples/imported-http
+dotnet run --project src/ReadableHttp.Cli -- export curl samples/requests/bodies/post-json.json
+```
+
+`trydoc` normalizes local files in memory for future UI usage. Supported inputs include OpenAPI/Swagger JSON/YAML, `.http`, curl command files, and ReadableHttp request JSON. A UI can show the raw file and a normalized Try view from the same `ReadableTryDocument`.
+
+Workspaces can be local or Git-backed. Git workspaces expose status, pull, and push operations through `ReadableWorkspaceGitService`.
+
+Workspace content is split by responsibility:
+
+- Collections are editable request sets. They load and save request JSON files under `requests/<collection-name>/` or the collection's `requestDirectory`.
+- Specifications are API contract sources such as OpenAPI, Swagger, `.http`, curl, or ReadableHttp request files. They can point at a local file or a remote endpoint, refresh into `specs/`, and normalize into a Try document without turning the source into an editable collection.
+- Operations from a specification can be tried directly or saved into a collection when you want an editable copy.
+
+Sample files and runnable projects are available under `samples/`:
+
+- `samples/ReadableHttp.ConsoleSample`: direct SDK usage.
+- `samples/ReadableHttp.WebApiSample`: ASP.NET Core DI and `IReadableHttpFactory` usage.
+- `samples/requests`: request JSON files for GET, POST, PUT, PATCH, DELETE, auth, body types, and streaming.

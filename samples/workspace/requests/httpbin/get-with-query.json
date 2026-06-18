@@ -1,0 +1,33 @@
+{
+  "id": "0a69648290b04572809c5dc77ae99ef4",
+  "name": "get-with-query",
+  "method": "GET",
+  "url": "{{baseUrl}}/get",
+  "pathParameters": [],
+  "query": [
+    {
+      "name": "keyword",
+      "value": "{{keyword}}",
+      "enabled": true,
+      "description": null
+    }
+  ],
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true,
+      "description": null
+    }
+  ],
+  "body": null,
+  "auth": null,
+  "options": {
+    "timeout": null,
+    "followRedirects": null,
+    "useCookies": null,
+    "ignoreSslErrors": null,
+    "proxy": null
+  },
+  "variables": {}
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Streaming lines",
+  "method": "GET",
+  "url": "{{baseUrl}}/stream/3",
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true
+    }
+  ]
+}

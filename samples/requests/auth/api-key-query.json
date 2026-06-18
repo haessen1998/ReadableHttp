@@ -1,0 +1,11 @@
+{
+  "name": "API key in query",
+  "method": "GET",
+  "url": "{{baseUrl}}/get",
+  "auth": {
+    "type": "apiKey",
+    "name": "api_key",
+    "value": "{{apiKey}}",
+    "apiKeyLocation": "query"
+  }
+}

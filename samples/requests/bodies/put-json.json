@@ -1,0 +1,17 @@
+{
+  "name": "PUT JSON body",
+  "method": "PUT",
+  "url": "{{baseUrl}}/put",
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true
+    }
+  ],
+  "body": {
+    "type": "json",
+    "contentType": "application/json",
+    "content": "{\n  \"id\": 1001,\n  \"name\": \"Updated by ReadableHttp\"\n}"
+  }
+}

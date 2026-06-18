@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ReadableHttp.AspNetCore\ReadableHttp.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\ReadableHttp.Core\ReadableHttp.Core.csproj" />
+  </ItemGroup>
+</Project>

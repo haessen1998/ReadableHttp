@@ -1,0 +1,17 @@
+{
+  "name": "POST JSON body",
+  "method": "POST",
+  "url": "{{baseUrl}}/post",
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true
+    }
+  ],
+  "body": {
+    "type": "json",
+    "contentType": "application/json",
+    "content": "{\n  \"name\": \"ReadableHttp\",\n  \"kind\": \"json\",\n  \"enabled\": true\n}"
+  }
+}

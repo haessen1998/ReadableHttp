@@ -1,0 +1,12 @@
+{
+  "name": "DELETE request",
+  "method": "DELETE",
+  "url": "{{baseUrl}}/delete",
+  "headers": [
+    {
+      "name": "accept",
+      "value": "application/json",
+      "enabled": true
+    }
+  ]
+}

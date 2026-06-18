@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.readablehttp.dev/readable-request.schema.json",
+  "title": "ReadableHttp Request",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "method": {
+      "type": "string",
+      "default": "GET"
+    },
+    "url": {
+      "type": "string"
+    },
+    "pathParameters": {
+      "$ref": "#/$defs/nameValueList"
+    },
+    "query": {
+      "$ref": "#/$defs/nameValueList"
+    },
+    "headers": {
+      "$ref": "#/$defs/nameValueList"
+    },
+    "body": {
+      "$ref": "#/$defs/body"
+    },
+    "auth": {
+      "$ref": "#/$defs/auth"
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/variable"
+      }
+    }
+  },
+  "required": [
+    "method",
+    "url"
+  ],
+  "$defs": {
+    "nameValue": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "nameValueList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nameValue"
+      },
+      "default": []
+    },
+    "variable": {
+      "oneOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "object",
+            "array",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "value": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "object",
+                "array",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "string",
+                "number",
+                "boolean",
+                "json"
+              ],
+              "default": "string"
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "body": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "none",
+            "raw",
+            "json",
+            "xml",
+            "html",
+            "javascript",
+            "formUrlEncoded",
+            "multipartFormData",
+            "binaryFile",
+            "graphql"
+          ]
+        },
+        "content": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contentType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "filePath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "form": {
+          "$ref": "#/$defs/nameValueList"
+        },
+        "multipart": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/multipartItem"
+          },
+          "default": []
+        },
+        "graphql": {
+          "$ref": "#/$defs/graphqlBody"
+        }
+      }
+    },
+    "multipartItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "text",
+            "file"
+          ],
+          "default": "text"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "filePath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fileName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contentType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "graphqlBody": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "variables": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "JSON object text sent as GraphQL variables."
+        },
+        "operationName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "none",
+            "inherit",
+            "basic",
+            "bearer",
+            "apiKey",
+            "oauth1",
+            "oauth2"
+          ]
+        },
+        "username": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "password": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "apiKeyLocation": {
+          "type": "string",
+          "enum": [
+            "header",
+            "query"
+          ]
+        }
+      }
+    }
+  }
+}

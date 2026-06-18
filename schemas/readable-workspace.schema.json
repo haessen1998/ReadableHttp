@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.readablehttp.dev/readable-workspace.schema.json",
+  "title": "ReadableHttp Workspace",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "local",
+        "git"
+      ],
+      "default": "local"
+    },
+    "git": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "remoteUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "type": "string",
+          "default": "main"
+        },
+        "autoPullOnOpen": {
+          "type": "boolean",
+          "default": false
+        },
+        "autoPushOnSave": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "collections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/collection"
+      },
+      "default": []
+    },
+    "specifications": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/specification"
+      },
+      "default": []
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/variable"
+      },
+      "default": {}
+    },
+    "environments": {
+      "type": "array",
+      "items": {
+        "$ref": "readable-environment.schema.json"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "$defs": {
+    "collection": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "default": "1.0"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": [
+            "local",
+            "remoteEndpoint"
+          ],
+          "default": "local",
+          "description": "Collections are editable request sets. remoteEndpoint is retained for compatibility; new remote API sources should use specifications."
+        },
+        "requestDirectory": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Workspace-relative directory containing editable request JSON files for this collection."
+        },
+        "remote": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "endpoint": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string",
+              "default": "GET"
+            },
+            "headers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              },
+              "default": []
+            },
+            "lastRefreshedAt": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            }
+          }
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/variable"
+          },
+          "default": {}
+        },
+        "requests": {
+          "type": "array",
+          "items": {
+            "$ref": "readable-request.schema.json"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "specification": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "default": "1.0"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": [
+            "localFile",
+            "remoteEndpoint"
+          ],
+          "default": "localFile"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "openApi",
+            "swagger",
+            "http",
+            "curl",
+            "readableRequest"
+          ],
+          "default": "unknown"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Workspace-relative path where the source specification is stored."
+        },
+        "remote": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "endpoint": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string",
+              "default": "GET"
+            },
+            "headers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              },
+              "default": []
+            },
+            "lastRefreshedAt": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "eTag": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/variable"
+          },
+          "default": {}
+        },
+        "lastNormalizedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "name",
+        "sourceType"
+      ]
+    },
+    "variable": {
+      "oneOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "object",
+            "array",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "value": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "object",
+                "array",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "string",
+                "number",
+                "boolean",
+                "json"
+              ],
+              "default": "string"
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
