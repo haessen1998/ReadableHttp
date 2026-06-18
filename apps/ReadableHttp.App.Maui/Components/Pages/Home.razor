@@ -391,27 +391,6 @@
         AddSession(collection.Name);
     }
 
-    private async Task RefreshCollectionAsync()
-    {
-        if (selectedCollection is null)
-        {
-            return;
-        }
-
-        var requests = await new ReadableRemoteCollectionRefresher().RefreshAsync(workspacePath, selectedCollection);
-        operations = requests.Select(request => new ReadableTryOperation
-        {
-            Id = request.Id,
-            Name = request.Name,
-            Method = request.Method,
-            Path = request.Url,
-            Request = request
-        }).ToList();
-        workspaceStatus = $"Refreshed {requests.Count} requests from {selectedCollection.Name}";
-        viewMode = "preview";
-        AddActivity("Collection", workspaceStatus);
-    }
-
     private async Task GitStatusAsync()
     {
         workspaceStatus = await new ReadableWorkspaceGitService().StatusAsync(workspacePath);

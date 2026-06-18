@@ -32,7 +32,7 @@ public sealed class ReadableHttpJsonStorageTests
     }
 
     [Fact]
-    public async Task LoadAsync_reads_simple_and_object_variables()
+    public async Task LoadAsync_reads_object_variables()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"readable-http-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -41,7 +41,10 @@ public sealed class ReadableHttpJsonStorageTests
         {
           "name": "dev",
           "variables": {
-            "baseUrl": "https://api.example.test",
+            "baseUrl": {
+              "value": "https://api.example.test",
+              "type": "string"
+            },
             "enabledFlag": {
               "value": true,
               "type": "boolean",
@@ -62,5 +65,25 @@ public sealed class ReadableHttpJsonStorageTests
         Assert.Equal("https://api.example.test", environment.Variables["baseUrl"].ToTemplateValue());
         Assert.Equal("true", environment.Variables["enabledFlag"].ToTemplateValue()?.ToLowerInvariant());
         Assert.Equal("{\"id\":42}", environment.Variables["payload"].ToTemplateValue());
+    }
+
+    [Fact]
+    public async Task LoadAsync_rejects_legacy_simple_variable_values()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"readable-http-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "environment.json");
+        await File.WriteAllTextAsync(path, """
+        {
+          "name": "dev",
+          "variables": {
+            "baseUrl": "https://api.example.test"
+          }
+        }
+        """, TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<System.Text.Json.JsonException>(() => new ReadableHttpJsonStorage().LoadAsync<ReadableEnvironment>(
+            path,
+            TestContext.Current.CancellationToken));
     }
 }

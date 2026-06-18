@@ -1,10 +1,10 @@
 {
   "name": "httpbin",
   "variables": {
-    "baseUrl": "https://httpbin.org",
-    "basicUser": "demo",
-    "basicPassword": "secret",
-    "bearerToken": "sample-token",
-    "apiKey": "sample-api-key"
+    "baseUrl": { "value": "https://httpbin.org", "type": "string" },
+    "basicUser": { "value": "demo", "type": "string" },
+    "basicPassword": { "value": "secret", "type": "string" },
+    "bearerToken": { "value": "sample-token", "type": "string" },
+    "apiKey": { "value": "sample-api-key", "type": "string" }
   }
 }

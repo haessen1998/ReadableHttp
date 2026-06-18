@@ -8,14 +8,14 @@ public enum ReadableWorkspaceType
 
 public enum ReadableCollectionSourceType
 {
-    Local,
-    RemoteEndpoint
+    Local
 }
 
 public enum ReadableSpecificationSourceType
 {
     LocalFile,
-    RemoteEndpoint
+    RemoteEndpoint,
+    GitFile
 }
 
 public enum ReadableSpecificationFormat
@@ -25,7 +25,9 @@ public enum ReadableSpecificationFormat
     Swagger,
     Http,
     Curl,
-    ReadableRequest
+    ReadableRequest,
+    Har,
+    PostmanCollection
 }
 
 public sealed class ReadableWorkspace
@@ -59,8 +61,6 @@ public sealed class ReadableCollection
 
     public ReadableCollectionSourceType SourceType { get; set; } = ReadableCollectionSourceType.Local;
 
-    public ReadableRemoteCollectionOptions? Remote { get; set; }
-
     public string? RequestDirectory { get; set; }
 
     public Dictionary<string, ReadableVariable> Variables { get; set; } = [];
@@ -82,7 +82,13 @@ public sealed class ReadableSpecification
 
     public string? Path { get; set; }
 
+    public string? NormalizedPath { get; set; }
+
+    public string? Checksum { get; set; }
+
     public ReadableRemoteSpecificationOptions? Remote { get; set; }
+
+    public ReadableGitSpecificationOptions? Git { get; set; }
 
     public Dictionary<string, ReadableVariable> Variables { get; set; } = [];
 
@@ -100,17 +106,6 @@ public sealed class ReadableGitOptions
     public bool AutoPushOnSave { get; set; }
 }
 
-public sealed class ReadableRemoteCollectionOptions
-{
-    public string Endpoint { get; set; } = string.Empty;
-
-    public string Method { get; set; } = "GET";
-
-    public List<ReadableNameValue> Headers { get; set; } = [];
-
-    public DateTimeOffset? LastRefreshedAt { get; set; }
-}
-
 public sealed class ReadableRemoteSpecificationOptions
 {
     public string Endpoint { get; set; } = string.Empty;
@@ -122,6 +117,19 @@ public sealed class ReadableRemoteSpecificationOptions
     public DateTimeOffset? LastRefreshedAt { get; set; }
 
     public string? ETag { get; set; }
+
+    public string? Checksum { get; set; }
+
+    public bool UpdateAvailable { get; set; }
+}
+
+public sealed class ReadableGitSpecificationOptions
+{
+    public string? RemoteUrl { get; set; }
+
+    public string Branch { get; set; } = "main";
+
+    public string Path { get; set; } = string.Empty;
 }
 
 public sealed class ReadableEnvironment

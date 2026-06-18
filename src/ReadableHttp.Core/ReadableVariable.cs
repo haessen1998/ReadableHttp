@@ -52,19 +52,9 @@ internal sealed class ReadableVariableJsonConverter : JsonConverter<ReadableVari
         Type typeToConvert,
         JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonTokenType.Null)
-        {
-            return new ReadableVariable { Value = null };
-        }
-
         if (reader.TokenType != JsonTokenType.StartObject)
         {
-            var value = JsonNode.Parse(ref reader);
-            return new ReadableVariable
-            {
-                Value = value,
-                Type = InferType(value)
-            };
+            throw new JsonException("ReadableHttp variables must be JSON objects with a value property.");
         }
 
         using var document = JsonDocument.ParseValue(ref reader);

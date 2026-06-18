@@ -99,11 +99,10 @@
         "sourceType": {
           "type": "string",
           "enum": [
-            "local",
-            "remoteEndpoint"
+            "local"
           ],
           "default": "local",
-          "description": "Collections are editable request sets. remoteEndpoint is retained for compatibility; new remote API sources should use specifications."
+          "description": "Collections are editable request sets. Remote API sources are modeled as specifications."
         },
         "requestDirectory": {
           "type": [
@@ -111,35 +110,6 @@
             "null"
           ],
           "description": "Workspace-relative directory containing editable request JSON files for this collection."
-        },
-        "remote": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "properties": {
-            "endpoint": {
-              "type": "string"
-            },
-            "method": {
-              "type": "string",
-              "default": "GET"
-            },
-            "headers": {
-              "type": "array",
-              "items": {
-                "type": "object"
-              },
-              "default": []
-            },
-            "lastRefreshedAt": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "format": "date-time"
-            }
-          }
         },
         "variables": {
           "type": "object",
@@ -178,7 +148,8 @@
           "type": "string",
           "enum": [
             "localFile",
-            "remoteEndpoint"
+            "remoteEndpoint",
+            "gitFile"
           ],
           "default": "localFile"
         },
@@ -190,7 +161,9 @@
             "swagger",
             "http",
             "curl",
-            "readableRequest"
+            "readableRequest",
+            "har",
+            "postmanCollection"
           ],
           "default": "unknown"
         },
@@ -200,6 +173,20 @@
             "null"
           ],
           "description": "Workspace-relative path where the source specification is stored."
+        },
+        "normalizedPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Workspace-relative path to the normalized TryDocument cache for this source version."
+        },
+        "checksum": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "SHA-256 checksum of the current source content."
         },
         "remote": {
           "type": [
@@ -233,6 +220,39 @@
                 "string",
                 "null"
               ]
+            },
+            "checksum": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "SHA-256 checksum from the most recent remote refresh."
+            },
+            "updateAvailable": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "git": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "remoteUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "branch": {
+              "type": "string",
+              "default": "main"
+            },
+            "path": {
+              "type": "string",
+              "description": "Path to the specification file within the git checkout."
             }
           }
         },
@@ -257,8 +277,10 @@
       ]
     },
     "variable": {
-      "oneOf": [
-        {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "value": {
           "type": [
             "string",
             "number",
@@ -268,42 +290,29 @@
             "null"
           ]
         },
-        {
-          "type": "object",
-          "additionalProperties": true,
-          "properties": {
-            "value": {
-              "type": [
-                "string",
-                "number",
-                "boolean",
-                "object",
-                "array",
-                "null"
-              ]
-            },
-            "type": {
-              "type": "string",
-              "enum": [
-                "string",
-                "number",
-                "boolean",
-                "json"
-              ],
-              "default": "string"
-            },
-            "enabled": {
-              "type": "boolean",
-              "default": true
-            },
-            "description": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
+        "type": {
+          "type": "string",
+          "enum": [
+            "string",
+            "number",
+            "boolean",
+            "json"
+          ],
+          "default": "string"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
+      },
+      "required": [
+        "value"
       ]
     }
   }

@@ -73,11 +73,6 @@ public sealed class ReadableWorkspaceStore
     {
         ArgumentNullException.ThrowIfNull(collection);
 
-        if (collection.SourceType == ReadableCollectionSourceType.RemoteEndpoint)
-        {
-            throw new InvalidOperationException("Remote endpoint collections are deprecated. Use workspace specifications for remote API sources.");
-        }
-
         var requestDirectory = GetCollectionRequestDirectory(workspacePath, collection);
         Directory.CreateDirectory(requestDirectory);
 

@@ -79,14 +79,23 @@ await foreach (var message in ReadableHttpClient
   "schemaVersion": "1.0",
   "name": "dev",
   "variables": {
-    "baseUrl": "https://api.example.com",
-    "userId": "1",
-    "token": "local-token"
+    "baseUrl": {
+      "value": "https://api.example.com",
+      "type": "string"
+    },
+    "userId": {
+      "value": "1",
+      "type": "string"
+    },
+    "token": {
+      "value": "local-token",
+      "type": "string"
+    }
   }
 }
 ```
 
-Stable JSON schemas for request, environment, and workspace files are published under `schemas/` and are included in the NuGet packages. Existing files without `schemaVersion` still load; newly saved files use the current format version.
+Stable JSON schemas for request, environment, and workspace files are published under `schemas/` and are included in the NuGet packages. Newly saved files use the current format version.
 
 ## CLI
 
@@ -116,6 +125,7 @@ Workspace content is split by responsibility:
 
 - Collections are editable request sets. They load and save request JSON files under `requests/<collection-name>/` or the collection's `requestDirectory`.
 - Specifications are API contract sources such as OpenAPI, Swagger, `.http`, curl, or ReadableHttp request files. They can point at a local file or a remote endpoint, refresh into `specs/`, and normalize into a Try document without turning the source into an editable collection.
+- Specification sources track SHA-256 checksums. Remote refreshes save the source file and normalized Try document using checksum-based file names, then update the workspace paths to the latest version.
 - Operations from a specification can be tried directly or saved into a collection when you want an editable copy.
 
 Sample files and runnable projects are available under `samples/`:

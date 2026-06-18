@@ -78,8 +78,10 @@
       "default": []
     },
     "variable": {
-      "oneOf": [
-        {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "value": {
           "type": [
             "string",
             "number",
@@ -89,42 +91,29 @@
             "null"
           ]
         },
-        {
-          "type": "object",
-          "additionalProperties": true,
-          "properties": {
-            "value": {
-              "type": [
-                "string",
-                "number",
-                "boolean",
-                "object",
-                "array",
-                "null"
-              ]
-            },
-            "type": {
-              "type": "string",
-              "enum": [
-                "string",
-                "number",
-                "boolean",
-                "json"
-              ],
-              "default": "string"
-            },
-            "enabled": {
-              "type": "boolean",
-              "default": true
-            },
-            "description": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
+        "type": {
+          "type": "string",
+          "enum": [
+            "string",
+            "number",
+            "boolean",
+            "json"
+          ],
+          "default": "string"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
+      },
+      "required": [
+        "value"
       ]
     },
     "body": {

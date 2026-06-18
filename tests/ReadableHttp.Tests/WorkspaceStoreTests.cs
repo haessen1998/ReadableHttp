@@ -103,25 +103,4 @@ public sealed class WorkspaceStoreTests
         Assert.True(File.Exists(Path.Combine(path, "requests", "Local API", "Get User.json")));
     }
 
-    [Fact]
-    public async Task SaveCollectionRequestsAsync_rejects_deprecated_remote_collection()
-    {
-        var path = Path.Combine(Path.GetTempPath(), $"readable-http-workspace-{Guid.NewGuid():N}");
-        var store = new ReadableWorkspaceStore();
-        var collection = new ReadableCollection
-        {
-            Name = "Remote API",
-            SourceType = ReadableCollectionSourceType.RemoteEndpoint,
-            Remote = new ReadableRemoteCollectionOptions
-            {
-                Endpoint = "https://api.example.test/openapi.json"
-            }
-        };
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveCollectionRequestsAsync(
-            path,
-            collection,
-            [],
-            cancellationToken: TestContext.Current.CancellationToken));
-    }
 }

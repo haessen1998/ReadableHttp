@@ -4,4 +4,8 @@
     <Description>Core request, response, auth, workspace, and collection models for ReadableHttp.</Description>
     <PackageVersion>0.1.0</PackageVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\schemas\**\*.json" Pack="true" PackagePath="schemas\" />
+  </ItemGroup>
 </Project>
