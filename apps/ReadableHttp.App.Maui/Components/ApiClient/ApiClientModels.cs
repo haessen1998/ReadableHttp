@@ -20,8 +20,11 @@ public sealed record AppSettingsDraft(
 public enum RequestTabOrigin
 {
     Scratch,
+    Workspace,
+    CollectionConfig,
     Collection,
     Specification,
+    SpecificationDocument,
     Settings
 }
 

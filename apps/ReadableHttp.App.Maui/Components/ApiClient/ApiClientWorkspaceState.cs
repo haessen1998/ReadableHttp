@@ -158,7 +158,6 @@ public sealed class ApiClientWorkspaceState
         }
         AddWorkspaceOption(WorkspacePath);
         AddSpecFile(TryFilePath);
-        EnsureScratchTab();
         _initialized = true;
         NotifyChanged();
     }
@@ -282,16 +281,9 @@ public sealed class ApiClientWorkspaceState
             AddWorkspaceOption(WorkspacePath);
             Workspace = await _workspaceStore.LoadWorkspaceAsync(WorkspacePath);
             Collections = Workspace.Collections;
-            SelectedCollection = Collections.FirstOrDefault();
-            if (SelectedCollection is not null)
-            {
-                await LoadCollectionRequestsAsync(SelectedCollection);
-            }
-            SelectedRequest = SelectedCollection?.Requests.FirstOrDefault();
-            if (SelectedCollection is not null && SelectedRequest is not null)
-            {
-                OpenCollectionRequestTab(SelectedCollection, SelectedRequest);
-            }
+            SelectedCollection = null;
+            SelectedRequest = null;
+            OpenWorkspaceConfigTab();
             WorkspaceStatus = $"Loaded: {Workspace.Name}";
             AddActivity("Workspace", WorkspaceStatus);
             SaveSettings();
@@ -314,6 +306,7 @@ public sealed class ApiClientWorkspaceState
         Operations = document.Operations;
         ViewMode = "preview";
         AddSpecFile(TryFilePath);
+        OpenSpecificationDocumentTab(DocumentTitle, TryFilePath);
         AddActivity("Import", $"已转换 {Operations.Count} 个 operation");
         SaveSettings();
         NotifyChanged();
@@ -407,14 +400,11 @@ public sealed class ApiClientWorkspaceState
     {
         SelectedCollection = collection;
         await LoadCollectionRequestsAsync(collection);
-        SelectedRequest = collection.Requests.FirstOrDefault();
+        SelectedRequest = null;
         DocumentTitle = collection.Name;
         ActiveSource = collection.SourceType.ToString();
         AddSession(collection.Name);
-        if (SelectedRequest is not null)
-        {
-            OpenCollectionRequestTab(collection, SelectedRequest);
-        }
+        OpenCollectionConfigTab(collection);
         NotifyChanged();
     }
 
@@ -571,6 +561,7 @@ public sealed class ApiClientWorkspaceState
         SelectedRequest = null;
         DocumentTitle = collection.Name;
         ActiveSource = collection.SourceType.ToString();
+        OpenCollectionConfigTab(collection);
         AddActivity("Collection", $"已创建 {collection.Name}");
         NotifyChanged();
     }
@@ -649,6 +640,7 @@ public sealed class ApiClientWorkspaceState
             DocumentTitle = document.Title ?? specification.Name;
             ActiveSource = specification.SourceType.ToString();
             ViewMode = "preview";
+            OpenSpecificationDocumentTab(DocumentTitle, TryFilePath);
             await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
             AddActivity("Spec", specification.Remote?.UpdateAvailable == true
                 ? $"已刷新 {specification.Name}，发现变更"
@@ -675,9 +667,9 @@ public sealed class ApiClientWorkspaceState
         }
 
         WorkspacePath = path;
-            WorkspaceStatus = $"Selected: {WorkspaceDisplayName(path)}";
-            await LoadWorkspaceAsync();
-        }
+        WorkspaceStatus = $"Selected: {WorkspaceDisplayName(path)}";
+        await LoadWorkspaceAsync();
+    }
 
     public async Task SelectWorkspaceAsync(WorkspaceSelectedEventArgs args) => await SelectWorkspaceAsync(args.Path);
 
@@ -737,14 +729,14 @@ public sealed class ApiClientWorkspaceState
             await LoadCollectionRequestsAsync(SelectedCollection);
         }
 
-        SelectedRequest = SelectedCollection?.Requests.FirstOrDefault();
-        if (SelectedCollection is not null && SelectedRequest is not null)
+        SelectedRequest = null;
+        if (SelectedCollection is not null)
         {
-            OpenCollectionRequestTab(SelectedCollection, SelectedRequest);
+            OpenCollectionConfigTab(SelectedCollection);
         }
         else
         {
-            OpenScratchTab();
+            OpenWorkspaceConfigTab();
         }
         WorkspaceStatus = $"Deleted collection: {collection.Name}";
         AddActivity("Collection", WorkspaceStatus);
@@ -769,7 +761,7 @@ public sealed class ApiClientWorkspaceState
         }
         else
         {
-            OpenScratchTab();
+            OpenCollectionConfigTab(SelectedCollection);
         }
         WorkspaceStatus = $"Deleted request: {request.Name}";
         AddActivity("Request", WorkspaceStatus);
@@ -795,6 +787,8 @@ public sealed class ApiClientWorkspaceState
         Workspace.Collections = Collections;
         await SaveWorkspaceAsync();
         SelectedCollection = clone;
+        SelectedRequest = null;
+        OpenCollectionConfigTab(clone);
         AddActivity("Collection", $"已复制 {collection.Name}");
         NotifyChanged();
     }
@@ -816,6 +810,14 @@ public sealed class ApiClientWorkspaceState
         {
             SelectedCollection = Collections.FirstOrDefault();
             SelectedRequest = null;
+            if (SelectedCollection is not null)
+            {
+                OpenCollectionConfigTab(SelectedCollection);
+            }
+            else
+            {
+                OpenWorkspaceConfigTab();
+            }
         }
         AddActivity("Collection", $"已删除 {collection.Name}");
         NotifyChanged();
@@ -902,17 +904,18 @@ public sealed class ApiClientWorkspaceState
 
         var wasActive = string.Equals(ActiveRequestTabId, tabId, StringComparison.Ordinal);
         RequestTabs.RemoveAt(index);
-        if (RequestTabs.Count == 0)
-        {
-            OpenScratchTab();
-        }
-        else if (wasActive)
+        if (wasActive && RequestTabs.Count > 0)
         {
             ActivateTab(RequestTabs[Math.Clamp(index - 1, 0, RequestTabs.Count - 1)]);
             if (ActiveRequestTab is not null)
             {
                 SyncSelectionFromTab(ActiveRequestTab);
             }
+        }
+        else if (RequestTabs.Count == 0)
+        {
+            ActiveRequestTabId = null;
+            SelectedRequest = null;
         }
 
         NotifyChanged();
@@ -1084,14 +1087,6 @@ public sealed class ApiClientWorkspaceState
         return OpenScratchTab();
     }
 
-    private void EnsureScratchTab()
-    {
-        if (RequestTabs.Count == 0)
-        {
-            OpenScratchTab();
-        }
-    }
-
     private RequestWorkspaceTab OpenScratchTab()
     {
         var tab = new RequestWorkspaceTab
@@ -1099,6 +1094,57 @@ public sealed class ApiClientWorkspaceState
             Title = "Scratch Request",
             Origin = RequestTabOrigin.Scratch,
             ActiveSource = "Request"
+        };
+        RequestTabs.Add(tab);
+        ActivateTab(tab);
+        return tab;
+    }
+
+    private RequestWorkspaceTab OpenWorkspaceConfigTab()
+    {
+        var key = string.IsNullOrWhiteSpace(WorkspacePath) ? "workspace" : WorkspacePath;
+        var existing = RequestTabs.FirstOrDefault(tab =>
+            tab.Origin == RequestTabOrigin.Workspace
+            && string.Equals(tab.SourceKey, key, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            ActivateTab(existing);
+            return existing;
+        }
+
+        var tab = new RequestWorkspaceTab
+        {
+            Title = WorkspaceName,
+            Origin = RequestTabOrigin.Workspace,
+            SourceKey = key,
+            ActiveSource = "Workspace"
+        };
+        RequestTabs.Add(tab);
+        ActivateTab(tab);
+        return tab;
+    }
+
+    private RequestWorkspaceTab OpenCollectionConfigTab(ReadableCollection collection)
+    {
+        var existing = RequestTabs.FirstOrDefault(tab =>
+            tab.Origin == RequestTabOrigin.CollectionConfig
+            && string.Equals(tab.CollectionId, collection.Id, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            SelectedCollection = collection;
+            SelectedRequest = null;
+            ActivateTab(existing);
+            return existing;
+        }
+
+        SelectedCollection = collection;
+        SelectedRequest = null;
+        var tab = new RequestWorkspaceTab
+        {
+            Title = collection.Name,
+            Origin = RequestTabOrigin.CollectionConfig,
+            CollectionId = collection.Id,
+            ActiveSource = "Collection"
         };
         RequestTabs.Add(tab);
         ActivateTab(tab);
@@ -1150,6 +1196,31 @@ public sealed class ApiClientWorkspaceState
         return tab;
     }
 
+    private RequestWorkspaceTab OpenSpecificationDocumentTab(string title, string path)
+    {
+        var key = string.IsNullOrWhiteSpace(path) ? title : path;
+        var existing = RequestTabs.FirstOrDefault(tab =>
+            tab.Origin == RequestTabOrigin.SpecificationDocument
+            && string.Equals(tab.SourceKey, key, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            existing.Title = title;
+            ActivateTab(existing);
+            return existing;
+        }
+
+        var tab = new RequestWorkspaceTab
+        {
+            Title = title,
+            Origin = RequestTabOrigin.SpecificationDocument,
+            SourceKey = key,
+            ActiveSource = "Specification"
+        };
+        RequestTabs.Add(tab);
+        ActivateTab(tab);
+        return tab;
+    }
+
     private RequestWorkspaceTab OpenSettingsTab()
     {
         var existing = RequestTabs.FirstOrDefault(tab => tab.Origin == RequestTabOrigin.Settings);
@@ -1188,7 +1259,7 @@ public sealed class ApiClientWorkspaceState
         ActiveRequestTabId = tab.Id;
         DocumentTitle = tab.Title;
         ActiveSource = tab.ActiveSource;
-        ViewMode = "request";
+        ViewMode = tab.Origin == RequestTabOrigin.SpecificationDocument ? "preview" : "request";
     }
 
     private void CloseTabsForRequest(string requestId)
@@ -1196,12 +1267,19 @@ public sealed class ApiClientWorkspaceState
         RequestTabs.RemoveAll(tab => string.Equals(tab.RequestId, requestId, StringComparison.OrdinalIgnoreCase));
         if (ActiveRequestTab is null)
         {
-            OpenScratchTab();
+            ActiveRequestTabId = RequestTabs.FirstOrDefault()?.Id;
         }
     }
 
     private void SyncSelectionFromTab(RequestWorkspaceTab tab)
     {
+        if (tab.Origin == RequestTabOrigin.CollectionConfig)
+        {
+            SelectedCollection = Collections.FirstOrDefault(collection => string.Equals(collection.Id, tab.CollectionId, StringComparison.OrdinalIgnoreCase));
+            SelectedRequest = null;
+            return;
+        }
+
         if (tab.Origin != RequestTabOrigin.Collection)
         {
             SelectedRequest = null;

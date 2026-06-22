@@ -87,8 +87,21 @@
     background: var(--accent-2);
 }
 
+.tab-origin.workspace,
+.tab-origin.collectionconfig {
+    background: var(--warning);
+}
+
 .tab-origin.specification {
     background: var(--accent);
+}
+
+.tab-origin.specificationdocument {
+    background: var(--success);
+}
+
+.tab-origin.settings {
+    background: var(--muted-2);
 }
 
 .new-tab-button {
@@ -205,10 +218,79 @@
 
 .raw-view,
 .request-canvas,
-.settings-page {
+.settings-page,
+.blank-page,
+.config-page,
+.spec-document-page {
     min-width: 0;
     min-height: 0;
     overflow: auto;
+}
+
+.blank-page,
+.config-page,
+.spec-document-page,
+.settings-page,
+.raw-view {
+    grid-row: 2 / -1;
+}
+
+.blank-page {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 18px;
+    background: var(--bg);
+    padding: 24px;
+    text-align: center;
+}
+
+.blank-copy {
+    display: grid;
+    gap: 7px;
+    max-width: 520px;
+}
+
+.blank-copy span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.blank-copy strong {
+    color: var(--text);
+    font-size: 22px;
+}
+
+.blank-copy p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.blank-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.blank-actions button {
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: var(--control-radius);
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.blank-actions button:hover {
+    border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+    background: var(--panel-3);
 }
 
 .settings-page {
@@ -220,7 +302,8 @@
     padding: 18px;
 }
 
-.settings-page > header {
+.settings-page > header,
+.config-page > header {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -228,19 +311,22 @@
     padding-bottom: 12px;
 }
 
-.settings-page > header span {
+.settings-page > header span,
+.config-page > header span {
     color: var(--muted);
     font-size: 12px;
     font-weight: 800;
     text-transform: uppercase;
 }
 
-.settings-page > header strong {
+.settings-page > header strong,
+.config-page > header strong {
     color: var(--text);
     font-size: 18px;
 }
 
-.settings-section {
+.settings-section,
+.config-section {
     display: grid;
     gap: 10px;
     max-width: 720px;
@@ -248,17 +334,60 @@
     padding-bottom: 14px;
 }
 
-.settings-section h2 {
+.settings-section h2,
+.config-section h2 {
     margin: 0;
     color: var(--text);
     font-size: 14px;
 }
 
-.settings-section p {
+.settings-section p,
+.config-section p {
     margin: 0;
     color: var(--muted);
     font-size: 12px;
     line-height: 1.55;
+}
+
+.config-page {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    background: var(--bg);
+    padding: 18px;
+}
+
+.config-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    font-size: 12px;
+}
+
+.config-table td {
+    border-bottom: 1px solid var(--line-soft);
+    padding: 9px 10px;
+}
+
+.config-table td:first-child {
+    width: 140px;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.config-table td:nth-child(2) {
+    color: var(--text);
+    font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+.config-table td:nth-child(3) {
+    color: var(--muted);
+}
+
+.spec-document-page {
+    display: grid;
+    min-height: 0;
+    background: var(--bg);
 }
 
 .settings-section label {

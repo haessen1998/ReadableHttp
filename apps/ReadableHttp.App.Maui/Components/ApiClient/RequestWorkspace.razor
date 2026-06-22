@@ -15,7 +15,23 @@
         <button class="new-tab-button" title="New scratch request" @onclick="OnNewScratchRequest">+</button>
     </nav>
 
-    @if (ActiveRequestOrigin != RequestTabOrigin.Settings)
+    @if (ActiveRequestOrigin is null)
+    {
+        <section class="blank-page">
+            <div class="blank-copy">
+                <span>Workspace</span>
+                <strong>Open something to begin</strong>
+                <p>Choose a workspace, create a collection, start a request, or load a specification.</p>
+            </div>
+            <div class="blank-actions">
+                <button @onclick="OnPickWorkspace">Open Workspace</button>
+                <button @onclick="OnNewCollection">Create Collection</button>
+                <button @onclick="OnNewScratchRequest">New Request</button>
+                <button @onclick="OnPickTryFile">Load Specification</button>
+            </div>
+        </section>
+    }
+    else if (IsRequestEditor)
     {
         <header class="request-toolbar">
             <div class="method-field @Method.ToLowerInvariant()">
@@ -36,7 +52,10 @@
         </header>
     }
 
-    @if (ActiveRequestOrigin == RequestTabOrigin.Settings)
+    @if (ActiveRequestOrigin is null)
+    {
+    }
+    else if (ActiveRequestOrigin == RequestTabOrigin.Settings)
     {
         <section class="settings-page">
             <header>
@@ -87,6 +106,75 @@
             <footer class="settings-footer">
                 <button class="save-button" @onclick="OnSaveSettings">Save Settings</button>
             </footer>
+        </section>
+    }
+    else if (ActiveRequestOrigin == RequestTabOrigin.Workspace)
+    {
+        <section class="config-page">
+            <header>
+                <span>Workspace</span>
+                <strong>@WorkspaceName</strong>
+            </header>
+            <section class="config-section">
+                <h2>Scope</h2>
+                <table class="config-table">
+                    <tbody>
+                        <tr><td>Level</td><td>Workspace</td><td>Lowest shared defaults</td></tr>
+                        <tr><td>Path</td><td>@WorkspacePath</td><td>Local workspace root</td></tr>
+                        <tr><td>Collections</td><td>@CollectionCount</td><td>Collection overrides apply after workspace</td></tr>
+                        <tr><td>Specifications</td><td>@SpecificationCount</td><td>Documents can open request tabs</td></tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="config-section">
+                <h2>Environment</h2>
+                <table class="config-table">
+                    <tbody>
+                        <tr><td>baseUrl</td><td>Not set</td><td>Workspace default</td></tr>
+                        <tr><td>auth</td><td>Inherited</td><td>Request can override</td></tr>
+                        <tr><td>proxy</td><td>@ProxyMode</td><td>Global setting</td></tr>
+                    </tbody>
+                </table>
+            </section>
+        </section>
+    }
+    else if (ActiveRequestOrigin == RequestTabOrigin.CollectionConfig)
+    {
+        <section class="config-page">
+            <header>
+                <span>Collection</span>
+                <strong>@CollectionName</strong>
+            </header>
+            <section class="config-section">
+                <h2>Scope</h2>
+                <table class="config-table">
+                    <tbody>
+                        <tr><td>Level</td><td>Collection</td><td>Overrides workspace defaults</td></tr>
+                        <tr><td>Source</td><td>@CollectionSource</td><td>Local and remote sources can diverge later</td></tr>
+                        <tr><td>Requests</td><td>@CollectionRequestCount</td><td>Request tabs have highest precedence</td></tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="config-section">
+                <h2>Environment</h2>
+                <table class="config-table">
+                    <tbody>
+                        <tr><td>baseUrl</td><td>Inherited</td><td>From workspace</td></tr>
+                        <tr><td>auth</td><td>Inherited</td><td>Collection override pending</td></tr>
+                        <tr><td>headers</td><td>Inherited</td><td>Request can override</td></tr>
+                    </tbody>
+                </table>
+            </section>
+        </section>
+    }
+    else if (ActiveRequestOrigin == RequestTabOrigin.SpecificationDocument && ViewMode == "raw")
+    {
+        <pre class="raw-view">@RawContent</pre>
+    }
+    else if (ActiveRequestOrigin == RequestTabOrigin.SpecificationDocument)
+    {
+        <section class="spec-document-page">
+            @PreviewContent
         </section>
     }
     else if (ViewMode == "raw")
@@ -223,9 +311,16 @@
     [Parameter] public RenderFragment? PreviewContent { get; set; }
     [Parameter] public string RequestTab { get; set; } = "Params";
     [Parameter] public string WorkspaceName { get; set; } = "scratch";
+    [Parameter] public string WorkspacePath { get; set; } = string.Empty;
+    [Parameter] public int CollectionCount { get; set; }
+    [Parameter] public int SpecificationCount { get; set; }
+    [Parameter] public string CollectionName { get; set; } = "Collection";
+    [Parameter] public string CollectionSource { get; set; } = "Local";
+    [Parameter] public int CollectionRequestCount { get; set; }
     [Parameter] public string ActiveSource { get; set; } = "Request";
     [Parameter] public int OperationCount { get; set; }
     [Parameter] public bool UseSystemProxy { get; set; }
+    [Parameter] public string ProxyMode { get; set; } = ApiClientWorkspaceState.ProxySystem;
     [Parameter] public string ResponseNodePath { get; set; } = "root";
     [Parameter] public string StatusClass { get; set; } = "status-chip";
     [Parameter] public string StatusText { get; set; } = "Ready";
@@ -242,6 +337,9 @@
     [Parameter] public EventCallback OnSaveRequest { get; set; }
     [Parameter] public EventCallback OnSaveRequestAsNew { get; set; }
     [Parameter] public EventCallback OnNewScratchRequest { get; set; }
+    [Parameter] public EventCallback OnPickWorkspace { get; set; }
+    [Parameter] public EventCallback OnNewCollection { get; set; }
+    [Parameter] public EventCallback OnPickTryFile { get; set; }
     [Parameter] public EventCallback OnSaveSettings { get; set; }
     [Parameter] public EventCallback<string> ThemeModeChanged { get; set; }
     [Parameter] public EventCallback<string> ProxyModeChanged { get; set; }
@@ -254,6 +352,10 @@
     [Parameter] public EventCallback<string> OnCloseOpenTab { get; set; }
     [Parameter] public EventCallback<string> OnSetRequestTab { get; set; }
     [Parameter] public EventCallback<ResponseNodeSelectedEventArgs> OnSelectResponseNode { get; set; }
+
+    private bool IsRequestEditor => ActiveRequestOrigin is RequestTabOrigin.Scratch
+        or RequestTabOrigin.Collection
+        or RequestTabOrigin.Specification;
 
     private async Task HandleMethodChanged(ChangeEventArgs args)
     {

@@ -204,8 +204,11 @@
     </section>
 
     <footer class="sidebar-env">
-        <button class="footer-button" title="Settings" @onclick="OnShowSettings">⚙</button>
-        <span>@WorkspaceFooterLabel</span>
+        <button class="workspace-quick-switch" title="Switch workspace" @onclick="ToggleWorkspaceMenu">
+            <span>@(WorkspaceName ?? WorkspaceLabel(WorkspacePath))</span>
+            <small>@WorkspaceTypeLabel</small>
+        </button>
+        <button class="footer-button settings-button" title="Settings" @onclick="OnShowSettings">⚙</button>
         <button class="footer-button" title="Hide sidebar" @onclick="OnToggleExplorer">◁</button>
     </footer>
 </aside>
@@ -280,8 +283,6 @@
     private string Query => searchText.Trim();
 
     private string WorkspaceTypeLabel => IsGitWorkspace ? "Git workspace" : "Local workspace";
-
-    private string WorkspaceFooterLabel => $"{(WorkspaceName ?? "local")} · {(IsGitWorkspace ? "git" : "local")}";
 
     private string EmptyCollectionsText => IsSearching ? "No matching collections." : "Create or load a collection.";
 
