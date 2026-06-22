@@ -101,6 +101,25 @@
           ],
           "default": "string"
         },
+        "source": {
+          "type": "string",
+          "enum": [
+            "fixed",
+            "expression",
+            "ai"
+          ],
+          "default": "fixed"
+        },
+        "expression": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Expression text evaluated by the host before request execution."
+        },
+        "ai": {
+          "$ref": "#/$defs/aiVariableOptions"
+        },
         "enabled": {
           "type": "boolean",
           "default": true
@@ -115,6 +134,44 @@
       "required": [
         "value"
       ]
+    },
+    "aiVariableOptions": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "businessMeaning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "avoidPreviouslyUsedValues": {
+          "type": "boolean",
+          "default": true
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
     },
     "body": {
       "type": "object",
@@ -289,8 +346,221 @@
             "header",
             "query"
           ]
+        },
+        "oauth1": {
+          "$ref": "#/$defs/oauth1"
+        },
+        "oauth2": {
+          "$ref": "#/$defs/oauth2"
         }
       }
+    },
+    "oauth1": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "consumerKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "consumerSecret": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tokenSecret": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signatureMethod": {
+          "type": "string",
+          "enum": [
+            "hmacSha1",
+            "plainText",
+            "rsaSha1"
+          ],
+          "default": "hmacSha1"
+        },
+        "placement": {
+          "$ref": "#/$defs/tokenPlacement"
+        },
+        "version": {
+          "type": "string",
+          "default": "1.0"
+        }
+      }
+    },
+    "oauth2": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "grantType": {
+          "type": "string",
+          "enum": [
+            "authorizationCode",
+            "clientCredentials",
+            "passwordCredentials",
+            "implicit",
+            "refreshToken"
+          ],
+          "default": "authorizationCode"
+        },
+        "authorizationUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tokenUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refreshTokenUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientSecret": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientAuthentication": {
+          "type": "string",
+          "enum": [
+            "none",
+            "clientSecretBasic",
+            "clientSecretPost"
+          ],
+          "default": "clientSecretBasic"
+        },
+        "redirectUri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "usePkce": {
+          "type": "boolean",
+          "default": true
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "audience": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resource": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "username": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "password": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extraParameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default": {}
+        },
+        "tokenSource": {
+          "type": "string",
+          "enum": [
+            "accessToken",
+            "idToken"
+          ],
+          "default": "accessToken"
+        },
+        "tokenId": {
+          "type": "string",
+          "default": "credentials"
+        },
+        "tokenPlacement": {
+          "$ref": "#/$defs/tokenPlacement"
+        },
+        "tokenName": {
+          "type": "string",
+          "default": "Authorization"
+        },
+        "headerPrefix": {
+          "type": "string",
+          "default": "Bearer"
+        },
+        "autoFetchToken": {
+          "type": "boolean",
+          "default": false
+        },
+        "autoRefreshToken": {
+          "type": "boolean",
+          "default": false
+        },
+        "refreshBeforeExpirySeconds": {
+          "type": "integer",
+          "default": 60
+        }
+      }
+    },
+    "tokenPlacement": {
+      "type": "string",
+      "enum": [
+        "header",
+        "query",
+        "requestBody"
+      ],
+      "default": "header"
     }
   }
 }

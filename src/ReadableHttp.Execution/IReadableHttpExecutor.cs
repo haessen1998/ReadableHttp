@@ -9,6 +9,11 @@ public interface IReadableHttpExecutor
         ReadableExecutionContext? context = null,
         CancellationToken cancellationToken = default);
 
+    Task<ReadableExchange> SendExchangeAsync(
+        ReadableRequest request,
+        ReadableExecutionContext? context = null,
+        CancellationToken cancellationToken = default);
+
     IAsyncEnumerable<ReadableStreamMessage> StreamAsync(
         ReadableRequest request,
         ReadableExecutionContext? context = null,

@@ -1,3 +1,140 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject ApiClientWorkspaceState State
 
-@Body
+<main class="api-client-shell @(State.IsDarkTheme ? "theme-dark" : "theme-light")">
+    @if (!State.ShowExplorer)
+    {
+        <button class="edge-toggle left" title="展开左侧资源栏" @onclick="State.ToggleExplorer">›</button>
+    }
+    @if (!State.ShowInspector)
+    {
+        <button class="edge-toggle right" title="展开右侧面板" @onclick="() => State.ShowRightPanel(RightPanelMode.Docs)">‹</button>
+    }
+
+    <section class="client-workbench @(State.ShowExplorer ? "" : "hide-explorer") @(State.ShowInspector ? "" : "hide-inspector")">
+        @if (State.ShowExplorer)
+        {
+            <ExplorerSidebar WorkspacePath="@State.WorkspacePath"
+                             WorkspaceStatus="@State.WorkspaceStatus"
+                             WorkspaceName="@State.Workspace?.Name"
+                             IsGitWorkspace="@State.IsGitWorkspace"
+                             ShowWorkspaceSection="@State.ShowWorkspaceSection"
+                             ShowCollectionsSection="@State.ShowCollectionsSection"
+                             ShowSpecsSection="@State.ShowSpecsSection"
+                             ShowRecentSection="@State.ShowRecentSection"
+                             WorkspaceOptions="@State.WorkspaceOptions"
+                             Collections="@State.Collections"
+                             SelectedCollection="@State.SelectedCollection"
+                             SelectedRequest="@State.SelectedRequest"
+                             Specifications="@State.Specifications"
+                             SpecFiles="@State.SpecFiles"
+                             TryFilePath="@State.TryFilePath"
+                             RecentSessions="@State.RecentSessions"
+                             Method="@State.Method"
+                             DocumentTitle="@State.DocumentTitle"
+                             OnNewScratchRequest="@State.NewScratchRequest"
+                             OnShowSettings="@(() => State.ShowRightPanel(RightPanelMode.Settings))"
+                             OnNewCollection="@State.NewCollection"
+                             OnPickWorkspace="@State.PickWorkspaceAsync"
+                             OnNewWorkspace="@State.NewWorkspaceAsync"
+                             WorkspaceAutoInitialize="@State.WorkspaceAutoInitialize"
+                             WorkspaceAutoInitializeChanged="@((value) => State.WorkspaceAutoInitialize = value)"
+                             OnLoadWorkspace="@State.LoadWorkspaceAsync"
+                             OnSaveWorkspace="@State.SaveWorkspaceAsync"
+                             OnOpenWorkspaceInExplorer="@State.OpenWorkspaceInExplorer"
+                             OnRemoveWorkspaceOption="@State.RemoveWorkspaceOption"
+                             OnDeleteCollection="@State.DeleteSelectedCollectionAsync"
+                             OnDeleteRequest="@State.DeleteSelectedRequestAsync"
+                             OnGitStatus="@State.GitStatusAsync"
+                             OnGitPull="@State.GitPullAsync"
+                             OnGitPush="@State.GitPushAsync"
+                             OnSelectWorkspace="@State.SelectWorkspaceAsync"
+                             OnToggleWorkspaceSection="@State.ToggleWorkspaceSection"
+                             OnToggleCollectionsSection="@State.ToggleCollectionsSection"
+                             OnToggleSpecsSection="@State.ToggleSpecsSection"
+                             OnToggleRecentSection="@State.ToggleRecentSection"
+                             OnSelectCollection="@State.SelectCollectionAsync"
+                             OnSelectRequest="@State.SelectRequestAsync"
+                             OnNewRequestInCollection="@State.NewRequestInCollectionAsync"
+                             OnDuplicateCollection="@State.DuplicateCollectionAsync"
+                             OnDeleteCollectionItem="@State.DeleteCollectionAsync"
+                             OnOpenCollectionInExplorer="@State.OpenCollectionInExplorer"
+                             OnDuplicateRequest="@State.DuplicateRequestAsync"
+                             OnDeleteRequestItem="@State.DeleteRequestAsync"
+                             OnOpenRequestDefault="@State.OpenRequestDefault"
+                             OnShowRequest="@State.ShowRequest"
+                             OnPickTryFile="@State.PickTryFileAsync"
+                             OnLoadTryDocument="@State.LoadTryDocumentAsync"
+                             OnSelectSpec="@State.SelectSpecAsync"
+                             OnSelectSpecification="@State.SelectSpecificationAsync"
+                             OnRefreshSpecification="@State.RefreshSpecificationAsync"
+                             OnOpenSpecificationInExplorer="@State.OpenSpecificationInExplorer"
+                             OnShowRaw="@State.ShowRaw"
+                             OnSelectSession="@State.SelectSession"
+                             OnToggleExplorer="@State.ToggleExplorer" />
+        }
+
+        @Body
+
+        @if (State.ShowInspector)
+        {
+            <RightPanelHost Mode="@State.RightPanelMode"
+                            ViewMode="@State.ViewMode"
+                            DocumentTitle="@State.DocumentTitle"
+                            TryFilePath="@State.TryFilePath"
+                            ActiveSource="@State.ActiveSource"
+                            Operations="@State.Operations"
+                            PipelinePhases="@State.PipelinePhases"
+                            PipelineTotalLabel="@State.PipelineTotalLabel"
+                            Method="@State.Method"
+                            Url="@State.Url"
+                            BodyText="@State.BodyText"
+                            StatusText="@State.StatusText"
+                            WorkspaceName="@State.WorkspaceName"
+                            ProxyMode="@State.ProxyMode"
+                            SettingsDraft="@State.SettingsDraft"
+                            ThemeModeChanged="@State.SetDraftThemeMode"
+                            ProxyModeChanged="@State.SetDraftProxyMode"
+                            CustomProxyUrlChanged="@State.SetDraftCustomProxyUrl"
+                            CustomProxyUsernameChanged="@State.SetDraftCustomProxyUsername"
+                            CustomProxyPasswordChanged="@State.SetDraftCustomProxyPassword"
+                            DevToolsEnabledChanged="@State.SetDraftDevToolsEnabled"
+                            LanguageChanged="@State.SetDraftLanguage"
+                            ActivityLog="@State.ActivityLog"
+                            AiMessages="@State.AiMessages"
+                            AiDraft="@State.AiDraft"
+                            AiDraftChanged="@State.SetAiDraft"
+                            OnSelectMode="@State.ShowRightPanel"
+                            OnToggleInspector="@State.ToggleInspector"
+                            OnSelectOperation="@State.SelectOperation"
+                            OnSendAiMessage="@State.SendAiMessage"
+                            OnSaveSettings="@State.SaveSettings" />
+        }
+    </section>
+</main>
+
+@code {
+    protected override void OnInitialized()
+    {
+        State.Initialize();
+        State.Changed += HandleStateChanged;
+    }
+
+    private async void HandleStateChanged()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception exception)
+        {
+            await DispatchExceptionAsync(exception);
+        }
+    }
+
+    public void Dispose()
+    {
+        State.Changed -= HandleStateChanged;
+    }
+}

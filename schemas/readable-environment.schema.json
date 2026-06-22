@@ -52,6 +52,24 @@
           ],
           "default": "string"
         },
+        "source": {
+          "type": "string",
+          "enum": [
+            "fixed",
+            "expression",
+            "ai"
+          ],
+          "default": "fixed"
+        },
+        "expression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ai": {
+          "$ref": "#/$defs/aiVariableOptions"
+        },
         "enabled": {
           "type": "boolean",
           "default": true
@@ -66,6 +84,44 @@
       "required": [
         "value"
       ]
+    },
+    "aiVariableOptions": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "businessMeaning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "avoidPreviouslyUsedValues": {
+          "type": "boolean",
+          "default": true
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
     }
   }
 }

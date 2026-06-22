@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "id": "b54d5108dd874240ada8b9ff0455d706",
+  "name": "HTTPBin Examples Request 3",
+  "method": "GET",
+  "url": "https://httpbin.org/get",
+  "pathParameters": [],
+  "query": [],
+  "headers": [],
+  "body": null,
+  "auth": null,
+  "options": {
+    "timeout": null,
+    "followRedirects": null,
+    "useCookies": null,
+    "ignoreSslErrors": null,
+    "proxy": null
+  },
+  "variables": {}
+}

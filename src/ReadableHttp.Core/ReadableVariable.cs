@@ -11,6 +11,12 @@ public sealed class ReadableVariable
 
     public ReadableVariableType Type { get; set; } = ReadableVariableType.String;
 
+    public ReadableVariableSource Source { get; set; } = ReadableVariableSource.Fixed;
+
+    public string? Expression { get; set; }
+
+    public ReadableAiVariableOptions? Ai { get; set; }
+
     public bool Enabled { get; set; } = true;
 
     public string? Description { get; set; }
@@ -20,7 +26,8 @@ public sealed class ReadableVariable
         return new ReadableVariable
         {
             Value = value is null ? null : JsonValue.Create(value),
-            Type = ReadableVariableType.String
+            Type = ReadableVariableType.String,
+            Source = ReadableVariableSource.Fixed
         };
     }
 
@@ -43,6 +50,26 @@ public enum ReadableVariableType
     Number,
     Boolean,
     Json
+}
+
+public enum ReadableVariableSource
+{
+    Fixed,
+    Expression,
+    Ai
+}
+
+public sealed class ReadableAiVariableOptions
+{
+    public string? Purpose { get; set; }
+
+    public string? Prompt { get; set; }
+
+    public string? BusinessMeaning { get; set; }
+
+    public bool AvoidPreviouslyUsedValues { get; set; } = true;
+
+    public List<string> DependsOn { get; set; } = [];
 }
 
 internal sealed class ReadableVariableJsonConverter : JsonConverter<ReadableVariable>
@@ -71,6 +98,25 @@ internal sealed class ReadableVariableJsonConverter : JsonConverter<ReadableVari
             && Enum.TryParse<ReadableVariableType>(typeProperty.GetString(), ignoreCase: true, out var type))
         {
             variable.Type = type;
+        }
+
+        if (root.TryGetProperty("source", out var sourceProperty)
+            && Enum.TryParse<ReadableVariableSource>(sourceProperty.GetString(), ignoreCase: true, out var source))
+        {
+            variable.Source = source;
+        }
+
+        if (root.TryGetProperty("expression", out var expressionProperty))
+        {
+            variable.Expression = expressionProperty.GetString();
+        }
+
+        if (root.TryGetProperty("ai", out var aiProperty)
+            && aiProperty.ValueKind == JsonValueKind.Object)
+        {
+            variable.Ai = JsonSerializer.Deserialize<ReadableAiVariableOptions>(
+                aiProperty.GetRawText(),
+                options);
         }
 
         if (root.TryGetProperty("enabled", out var enabledProperty)
@@ -104,6 +150,19 @@ internal sealed class ReadableVariableJsonConverter : JsonConverter<ReadableVari
         }
 
         writer.WriteString("type", JsonNamingPolicy.CamelCase.ConvertName(value.Type.ToString()));
+        writer.WriteString("source", JsonNamingPolicy.CamelCase.ConvertName(value.Source.ToString()));
+
+        if (!string.IsNullOrWhiteSpace(value.Expression))
+        {
+            writer.WriteString("expression", value.Expression);
+        }
+
+        if (value.Ai is not null)
+        {
+            writer.WritePropertyName("ai");
+            JsonSerializer.Serialize(writer, value.Ai, options);
+        }
+
         writer.WriteBoolean("enabled", value.Enabled);
 
         if (!string.IsNullOrWhiteSpace(value.Description))

@@ -97,6 +97,25 @@ await foreach (var message in ReadableHttpClient
 
 Stable JSON schemas for request, environment, and workspace files are published under `schemas/` and are included in the NuGet packages. Newly saved files use the current format version.
 
+Variables support fixed values, host-evaluated expressions, and AI-assisted generation metadata:
+
+```json
+{
+  "orderId": {
+    "value": null,
+    "type": "string",
+    "source": "ai",
+    "ai": {
+      "purpose": "testParameter",
+      "businessMeaning": "Unique order identifier",
+      "avoidPreviouslyUsedValues": true
+    }
+  }
+}
+```
+
+AI execution lives outside the core file format. The `ReadableHttp.AI` package defines extension contracts for generating business-meaningful test parameters, explaining responses, suggesting request adjustments after errors, and analyzing request/response history.
+
 ## CLI
 
 ```shell

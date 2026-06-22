@@ -41,27 +41,45 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
         ReadableExecutionContext? context = null,
         CancellationToken cancellationToken = default)
     {
+        return await SendExchangeAsync(request, context, cancellationToken);
+    }
+
+    public async Task<ReadableExchange> SendExchangeAsync(
+        ReadableRequest request,
+        ReadableExecutionContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(request);
 
         context ??= new ReadableExecutionContext();
         var startedAt = DateTimeOffset.UtcNow;
+        var stopwatch = Stopwatch.StartNew();
+        var timings = new List<ReadableExchangeTiming>();
+        var buildStarted = stopwatch.Elapsed;
         var exchange = new ReadableExchange
         {
             Request = ReadableRequestVariableResolver.Resolve(request, context),
-            StartedAt = startedAt
+            StartedAt = startedAt,
+            Timings = timings
         };
         ApplyRequestOptions(exchange.Request, context);
-
-        var stopwatch = Stopwatch.StartNew();
+        AddTiming(timings, "Build Request", buildStarted, stopwatch.Elapsed);
 
         try
         {
+            var clientStarted = stopwatch.Elapsed;
             using var httpClient = CreateHttpClient(context);
+            AddTiming(timings, "Create HttpClient", clientStarted, stopwatch.Elapsed);
+
+            var sendStarted = stopwatch.Elapsed;
             var result = await SendWithRedirectsAsync(httpClient, exchange.Request, context, cancellationToken);
+            AddTiming(timings, "Send HTTP", sendStarted, stopwatch.Elapsed);
             exchange.RawRequestPreview = result.RawRequestPreview;
             using var response = result.Response;
 
+            var readStarted = stopwatch.Elapsed;
             var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            AddTiming(timings, "Read Response", readStarted, stopwatch.Elapsed);
             stopwatch.Stop();
 
             exchange.Response = new ReadableResponse
@@ -93,6 +111,20 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
         }
 
         return exchange;
+    }
+
+    private static void AddTiming(
+        List<ReadableExchangeTiming> timings,
+        string name,
+        TimeSpan startOffset,
+        TimeSpan finishedAt)
+    {
+        timings.Add(new ReadableExchangeTiming
+        {
+            Name = name,
+            StartOffset = startOffset,
+            Duration = finishedAt - startOffset
+        });
     }
 
     public async IAsyncEnumerable<ReadableStreamMessage> StreamAsync(

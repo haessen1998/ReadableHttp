@@ -1,0 +1,424 @@
+@using ReadableHttp.Core
+
+<aside class="sidebar-panel">
+    <header class="sidebar-brand">
+        <button class="brand-button" title="Workspace" @onclick="ToggleWorkspaceMenu">
+            <span class="brand-mark">R</span>
+            <span class="brand-copy">
+                <strong>@(WorkspaceName ?? "No workspace")</strong>
+                <small>@WorkspaceTypeLabel</small>
+            </span>
+            <span class="brand-caret">@(workspaceMenuOpen ? "▾" : "▸")</span>
+        </button>
+    </header>
+
+    @if (workspaceMenuOpen)
+    {
+        <section class="workspace-menu">
+            <div class="block-title workspace-title">
+                <span class="section-toggle static">
+                    <span>▾</span>
+                    <strong>Workspaces</strong>
+                </span>
+                <div class="title-actions">
+                    <button title="New workspace" @onclick="OnNewWorkspace">＋</button>
+                </div>
+            </div>
+            <div class="workspace-list">
+                @foreach (var item in FilteredWorkspaceOptions)
+                {
+                    var isActiveWorkspace = string.Equals(WorkspacePath, item, StringComparison.OrdinalIgnoreCase);
+                    <div @key="item" class="@WorkspaceClass(item)">
+                        <button class="workspace-main" @onclick="() => OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(item))">
+                            <span class="check-mark"></span>
+                            <span>@WorkspaceLabel(item)</span>
+                        </button>
+                        <div class="row-actions">
+                            <button title="More">···</button>
+                            <div class="more-menu">
+                                <button disabled>Rename</button>
+                                <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Open in Explorer</button>
+                                @if (isActiveWorkspace)
+                                {
+                                    <button @onclick="OnSaveWorkspace">Save</button>
+                                    @if (IsGitWorkspace)
+                                    {
+                                        <button @onclick="OnGitStatus">Git status</button>
+                                        <button @onclick="OnGitPull">Git pull</button>
+                                        <button @onclick="OnGitPush">Git push</button>
+                                    }
+                                }
+                                <button class="danger-menu" @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Remove from List</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <span class="muted-line">@WorkspaceStatus</span>
+        </section>
+    }
+
+    <section class="sidebar-search">
+        <span>⌕</span>
+        <input value="@searchText" @oninput="HandleSearchChanged" placeholder="Search workspaces, collections, requests, specs..." />
+        @if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            <button title="Clear search" @onclick="ClearSearch">×</button>
+        }
+    </section>
+
+    <section class="nav-block">
+        <div class="block-title">
+            <button class="section-toggle" @onclick="OnToggleCollectionsSection">
+                <span>@(ShowCollectionsSection ? "▾" : "▸")</span>
+                <strong>Collections</strong>
+            </button>
+            <div class="title-actions">
+                <button title="New collection" @onclick="OnNewCollection">＋</button>
+                <button title="Reload collections" @onclick="OnLoadWorkspace">↻</button>
+            </div>
+        </div>
+        @if (ShowCollectionsSection && FilteredCollections.Count == 0)
+        {
+            <div class="empty-copy">@EmptyCollectionsText</div>
+        }
+        else if (ShowCollectionsSection)
+        {
+            <div class="nav-list">
+                @foreach (var collection in FilteredCollections)
+                {
+                    <div @key="collection" class="collection-node">
+                        <div class="@CollectionClass(collection)">
+                            <button class="tree-main" @onclick="() => ToggleCollection(collection)">
+                                <span class="tree-caret">@(IsCollectionExpanded(collection) ? "▾" : "▸")</span>
+                                <span class="collection-icon">▣</span>
+                                <span class="item-main">@collection.Name</span>
+                                <small>@CollectionBadge(collection)</small>
+                            </button>
+                            <div class="row-actions">
+                                <button title="New request" @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))">＋</button>
+                                <button title="More">···</button>
+                                <div class="more-menu">
+                                    <button disabled>Rename</button>
+                                    <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))">Duplicate</button>
+                                    <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))">Open in Explorer</button>
+                                    <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                        @if (IsCollectionExpanded(collection) || IsSearching)
+                        {
+                            <div class="request-children">
+                                @if (FilteredRequests(collection).Count == 0)
+                                {
+                                    <div class="request-empty">No matching requests</div>
+                                }
+                                @foreach (var request in FilteredRequests(collection))
+                                {
+                                    <div @key="request" class="@RequestRowClass(request)">
+                                        <button class="request-main" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">
+                                            <span class="method tiny @request.Method.ToLowerInvariant()">@request.Method</span>
+                                            <strong>@request.Name</strong>
+                                        </button>
+                                        <div class="row-actions request-actions">
+                                            <button title="Open" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">↗</button>
+                                            <button title="More">···</button>
+                                            <div class="more-menu">
+                                                <button disabled>Rename</button>
+                                                <button @onclick="() => OnDuplicateRequest.InvokeAsync(new RequestEventArgs(collection, request))">Duplicate</button>
+                                                <button @onclick="() => OnOpenRequestDefault.InvokeAsync(new RequestEventArgs(collection, request))">Open default</button>
+                                                <button class="danger-menu" @onclick="() => OnDeleteRequestItem.InvokeAsync(new RequestEventArgs(collection, request))">Delete</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="nav-block">
+        <div class="block-title">
+            <button class="section-toggle" @onclick="OnToggleSpecsSection">
+                <span>@(ShowSpecsSection ? "▾" : "▸")</span>
+                <strong>Specifications</strong>
+            </button>
+            <div class="title-actions">
+                <button title="Add specification" @onclick="OnPickTryFile">＋</button>
+                <button title="Load current specification" @onclick="OnLoadTryDocument">↻</button>
+            </div>
+        </div>
+        @if (ShowSpecsSection && FilteredSpecifications.Count == 0 && FilteredSpecFiles.Count == 0)
+        {
+            <div class="empty-copy">Add a local or remote specification.</div>
+        }
+        else if (ShowSpecsSection)
+        {
+            <div class="nav-list">
+                @foreach (var specification in FilteredSpecifications)
+                {
+                    <div @key="specification" class="@SpecificationClass(specification)">
+                        <button class="tree-main" @onclick="() => OnSelectSpecification.InvokeAsync(new SpecificationEventArgs(specification))">
+                            <span class="@SpecificationDotClass(specification)"></span>
+                            <span class="item-main">@specification.Name</span>
+                            <small>@SpecificationBadge(specification)</small>
+                        </button>
+                        <div class="row-actions">
+                            @if (specification.SourceType == ReadableSpecificationSourceType.RemoteEndpoint)
+                            {
+                                <button title="Refresh remote specification" @onclick="() => OnRefreshSpecification.InvokeAsync(new SpecificationEventArgs(specification))">↻</button>
+                            }
+                            else
+                            {
+                                <button title="Open" @onclick="() => OnSelectSpecification.InvokeAsync(new SpecificationEventArgs(specification))">↗</button>
+                            }
+                            <button title="More">···</button>
+                            <div class="more-menu">
+                                <button disabled>Rename</button>
+                                <button disabled>Duplicate</button>
+                                <button @onclick="() => OnOpenSpecificationInExplorer.InvokeAsync(new SpecificationEventArgs(specification))">Open in Explorer</button>
+                                <button class="danger-menu" disabled>Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+                @foreach (var spec in FilteredSpecFiles)
+                {
+                    <div @key="spec" class="@SpecClass(spec)">
+                        <button class="tree-main" @onclick="() => OnSelectSpec.InvokeAsync(new SpecSelectedEventArgs(spec))">
+                            <span class="item-dot imported"></span>
+                            <span class="item-main">@Path.GetFileName(spec)</span>
+                            <small>@SpecBadge(spec)</small>
+                        </button>
+                        <div class="row-actions">
+                            <button title="Import preview" @onclick="() => OnSelectSpec.InvokeAsync(new SpecSelectedEventArgs(spec))">↻</button>
+                            <button title="Raw file" @onclick="OnShowRaw">⌘</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <footer class="sidebar-env">
+        <button class="footer-button" title="Settings" @onclick="OnShowSettings">⚙</button>
+        <span>@WorkspaceFooterLabel</span>
+        <button class="footer-button" title="Hide sidebar" @onclick="OnToggleExplorer">◁</button>
+    </footer>
+</aside>
+
+@code {
+    private bool workspaceMenuOpen = true;
+    private string searchText = string.Empty;
+    private readonly HashSet<string> expandedCollectionIds = [];
+
+    [Parameter] public string WorkspacePath { get; set; } = string.Empty;
+    [Parameter] public string WorkspaceStatus { get; set; } = string.Empty;
+    [Parameter] public string? WorkspaceName { get; set; }
+    [Parameter] public bool IsGitWorkspace { get; set; }
+    [Parameter] public bool ShowWorkspaceSection { get; set; }
+    [Parameter] public bool ShowCollectionsSection { get; set; }
+    [Parameter] public bool ShowSpecsSection { get; set; }
+    [Parameter] public bool ShowRecentSection { get; set; }
+    [Parameter] public bool WorkspaceAutoInitialize { get; set; }
+    [Parameter] public IReadOnlyList<string> WorkspaceOptions { get; set; } = [];
+    [Parameter] public IReadOnlyList<ReadableCollection> Collections { get; set; } = [];
+    [Parameter] public ReadableCollection? SelectedCollection { get; set; }
+    [Parameter] public ReadableRequest? SelectedRequest { get; set; }
+    [Parameter] public IReadOnlyList<ReadableSpecification> Specifications { get; set; } = [];
+    [Parameter] public IReadOnlyList<string> SpecFiles { get; set; } = [];
+    [Parameter] public string TryFilePath { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<string> RecentSessions { get; set; } = [];
+    [Parameter] public string Method { get; set; } = "GET";
+    [Parameter] public string DocumentTitle { get; set; } = string.Empty;
+
+    [Parameter] public EventCallback OnNewScratchRequest { get; set; }
+    [Parameter] public EventCallback OnShowSettings { get; set; }
+    [Parameter] public EventCallback OnNewCollection { get; set; }
+    [Parameter] public EventCallback OnPickWorkspace { get; set; }
+    [Parameter] public EventCallback OnNewWorkspace { get; set; }
+    [Parameter] public EventCallback<bool> WorkspaceAutoInitializeChanged { get; set; }
+    [Parameter] public EventCallback OnLoadWorkspace { get; set; }
+    [Parameter] public EventCallback OnSaveWorkspace { get; set; }
+    [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnOpenWorkspaceInExplorer { get; set; }
+    [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnRemoveWorkspaceOption { get; set; }
+    [Parameter] public EventCallback OnDeleteCollection { get; set; }
+    [Parameter] public EventCallback OnDeleteRequest { get; set; }
+    [Parameter] public EventCallback OnGitStatus { get; set; }
+    [Parameter] public EventCallback OnGitPull { get; set; }
+    [Parameter] public EventCallback OnGitPush { get; set; }
+    [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnSelectWorkspace { get; set; }
+    [Parameter] public EventCallback OnToggleWorkspaceSection { get; set; }
+    [Parameter] public EventCallback OnToggleCollectionsSection { get; set; }
+    [Parameter] public EventCallback OnToggleSpecsSection { get; set; }
+    [Parameter] public EventCallback OnToggleRecentSection { get; set; }
+    [Parameter] public EventCallback<CollectionEventArgs> OnSelectCollection { get; set; }
+    [Parameter] public EventCallback<RequestEventArgs> OnSelectRequest { get; set; }
+    [Parameter] public EventCallback<CollectionEventArgs> OnNewRequestInCollection { get; set; }
+    [Parameter] public EventCallback<CollectionEventArgs> OnDuplicateCollection { get; set; }
+    [Parameter] public EventCallback<CollectionEventArgs> OnDeleteCollectionItem { get; set; }
+    [Parameter] public EventCallback<CollectionEventArgs> OnOpenCollectionInExplorer { get; set; }
+    [Parameter] public EventCallback<RequestEventArgs> OnDuplicateRequest { get; set; }
+    [Parameter] public EventCallback<RequestEventArgs> OnDeleteRequestItem { get; set; }
+    [Parameter] public EventCallback<RequestEventArgs> OnOpenRequestDefault { get; set; }
+    [Parameter] public EventCallback OnShowRequest { get; set; }
+    [Parameter] public EventCallback OnPickTryFile { get; set; }
+    [Parameter] public EventCallback OnLoadTryDocument { get; set; }
+    [Parameter] public EventCallback<SpecSelectedEventArgs> OnSelectSpec { get; set; }
+    [Parameter] public EventCallback<SpecificationEventArgs> OnSelectSpecification { get; set; }
+    [Parameter] public EventCallback<SpecificationEventArgs> OnRefreshSpecification { get; set; }
+    [Parameter] public EventCallback<SpecificationEventArgs> OnOpenSpecificationInExplorer { get; set; }
+    [Parameter] public EventCallback OnShowRaw { get; set; }
+    [Parameter] public EventCallback<SessionSelectedEventArgs> OnSelectSession { get; set; }
+    [Parameter] public EventCallback OnToggleExplorer { get; set; }
+
+    private bool IsSearching => !string.IsNullOrWhiteSpace(searchText);
+
+    private string Query => searchText.Trim();
+
+    private string WorkspaceTypeLabel => IsGitWorkspace ? "Git workspace" : "Local workspace";
+
+    private string WorkspaceFooterLabel => $"{(WorkspaceName ?? "local")} · {(IsGitWorkspace ? "git" : "local")}";
+
+    private string EmptyCollectionsText => IsSearching ? "No matching collections." : "Create or load a collection.";
+
+    private IReadOnlyList<string> FilteredWorkspaceOptions => WorkspaceOptions
+        .Where(item => Matches(WorkspaceLabel(item)) || Matches(item))
+        .ToList();
+
+    private IReadOnlyList<ReadableCollection> FilteredCollections => Collections
+        .Where(collection => Matches(collection.Name) || collection.Requests.Any(RequestMatches))
+        .ToList();
+
+    private IReadOnlyList<ReadableSpecification> FilteredSpecifications => Specifications
+        .Where(specification => Matches(specification.Name)
+            || Matches(specification.Path)
+            || Matches(specification.Remote?.Endpoint)
+            || Matches(specification.SourceType.ToString()))
+        .ToList();
+
+    private IReadOnlyList<string> FilteredSpecFiles => SpecFiles
+        .Where(path => !Specifications.Any(specification => string.Equals(specification.Path, path, StringComparison.OrdinalIgnoreCase))
+            && (Matches(path) || Matches(Path.GetFileName(path))))
+        .ToList();
+
+    private IReadOnlyList<ReadableRequest> FilteredRequests(ReadableCollection collection)
+    {
+        return collection.Requests
+            .Where(RequestMatches)
+            .ToList();
+    }
+
+    private bool RequestMatches(ReadableRequest request)
+    {
+        return Matches(request.Name) || Matches(request.Method) || Matches(request.Url);
+    }
+
+    private bool Matches(string? value)
+    {
+        return string.IsNullOrWhiteSpace(Query)
+            || (!string.IsNullOrWhiteSpace(value)
+                && value.Contains(Query, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ToggleWorkspaceMenu()
+    {
+        workspaceMenuOpen = !workspaceMenuOpen;
+    }
+
+    private void ClearSearch()
+    {
+        searchText = string.Empty;
+    }
+
+    private async Task ToggleCollection(ReadableCollection collection)
+    {
+        if (!expandedCollectionIds.Add(collection.Id))
+        {
+            expandedCollectionIds.Remove(collection.Id);
+        }
+
+        await OnSelectCollection.InvokeAsync(new CollectionEventArgs(collection));
+    }
+
+    private bool IsCollectionExpanded(ReadableCollection collection)
+    {
+        return expandedCollectionIds.Contains(collection.Id);
+    }
+
+    private void HandleSearchChanged(ChangeEventArgs args)
+    {
+        searchText = Convert.ToString(args.Value) ?? string.Empty;
+    }
+
+    private async Task HandleWorkspaceAutoInitializeChanged(ChangeEventArgs args)
+    {
+        await WorkspaceAutoInitializeChanged.InvokeAsync(args.Value is bool value && value);
+    }
+
+    private string WorkspaceClass(string path) => string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase)
+        ? "workspace-option active"
+        : "workspace-option";
+
+    private string CollectionClass(ReadableCollection collection)
+    {
+        return ReferenceEquals(SelectedCollection, collection) ? "tree-row collection-row active" : "tree-row collection-row";
+    }
+
+    private string RequestRowClass(ReadableRequest request)
+    {
+        return SelectedRequest is not null && string.Equals(SelectedRequest.Id, request.Id, StringComparison.OrdinalIgnoreCase)
+            ? "request-row active"
+            : "request-row";
+    }
+
+    private string SpecClass(string path)
+    {
+        return string.Equals(TryFilePath, path, StringComparison.OrdinalIgnoreCase) ? "tree-row spec-row active" : "tree-row spec-row";
+    }
+
+    private string SpecificationClass(ReadableSpecification specification)
+    {
+        return string.Equals(TryFilePath, specification.Path, StringComparison.OrdinalIgnoreCase)
+            ? "tree-row spec-row active"
+            : "tree-row spec-row";
+    }
+
+    private static string WorkspaceLabel(string path)
+    {
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return string.IsNullOrWhiteSpace(name) ? path : name;
+    }
+
+    private static string CollectionBadge(ReadableCollection collection)
+    {
+        return collection.Requests.Count == 1 ? "1 request" : $"{collection.Requests.Count} requests";
+    }
+
+    private static string SpecificationBadge(ReadableSpecification specification)
+    {
+        var format = specification.Format == ReadableSpecificationFormat.Unknown && !string.IsNullOrWhiteSpace(specification.Path)
+            ? Path.GetExtension(specification.Path).TrimStart('.').ToUpperInvariant()
+            : specification.Format.ToString();
+        return string.IsNullOrWhiteSpace(format) ? "SPEC" : format;
+    }
+
+    private static string SpecificationDotClass(ReadableSpecification specification)
+    {
+        return specification.SourceType switch
+        {
+            ReadableSpecificationSourceType.RemoteEndpoint => specification.Remote?.UpdateAvailable == true ? "item-dot remote changed" : "item-dot remote",
+            ReadableSpecificationSourceType.GitFile => "item-dot git",
+            _ => "item-dot spec"
+        };
+    }
+
+    private static string SpecBadge(string path)
+    {
+        var extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
+        return string.IsNullOrWhiteSpace(extension) ? "API" : extension;
+    }
+}

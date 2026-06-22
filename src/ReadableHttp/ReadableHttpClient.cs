@@ -138,7 +138,7 @@ public sealed class ReadableHttpRequestBuilder
 
     public Task<ReadableExchange> SendExchangeAsync(CancellationToken cancellationToken = default)
     {
-        return _executor.SendAsync(_request, _context, cancellationToken);
+        return _executor.SendExchangeAsync(_request, _context, cancellationToken);
     }
 
     public IAsyncEnumerable<ReadableStreamMessage> StreamAsync(

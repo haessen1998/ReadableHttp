@@ -1,0 +1,116 @@
+@using ReadableHttp.Try
+
+<section class="swagger-stage">
+    <header class="swagger-header">
+        <div class="swagger-title">
+            <span class="spec-icon">{} </span>
+            <div>
+                <h1>@DocumentTitle</h1>
+                <p>@TryFilePath</p>
+            </div>
+            <span class="oas-pill">OAS 3.1</span>
+            <span class="version-pill">v1</span>
+        </div>
+        <div class="swagger-links">
+            <button @onclick="OnShowRaw">Raw</button>
+            <button class="accent-button" @onclick="OnLoadTryDocument">Import Preview</button>
+        </div>
+    </header>
+    <div class="swagger-search">
+        <span>⌕</span>
+        <input placeholder="Filter endpoints..." />
+        <strong>@Operations.Count endpoints</strong>
+    </div>
+    @if (Operations.Count == 0)
+    {
+        <div class="empty-panel">
+            <strong>No operations loaded</strong>
+            <span>@Path.GetFileName(TryFilePath)</span>
+            <button class="accent-button" @onclick="OnLoadTryDocument">Preview API</button>
+        </div>
+    }
+    else
+    {
+        <div class="swagger-groups">
+            @foreach (var group in Operations.GroupBy(operation => OperationTag(operation.Path)))
+            {
+                <section @key="group.Key" class="endpoint-group">
+                    <header>
+                        <span class="tag-dot"></span>
+                        <strong>@group.Key</strong>
+                        <small>@group.Count()</small>
+                    </header>
+                    @foreach (var operation in group)
+                    {
+                        var operationKey = OperationKey(operation);
+                        <article @key="operationKey" class="@EndpointCardClass(operation)">
+                            <button class="endpoint-summary" @onclick="() => OnToggleEndpoint.InvokeAsync(operation)">
+                                <span class="method @operation.Method.ToLowerInvariant()">@operation.Method</span>
+                                <span class="endpoint-path">@operation.Path</span>
+                                <span class="endpoint-name">@operation.Name</span>
+                                <span class="lock-mark">@(ExpandedOperationKey == operationKey ? "▴" : "▾")</span>
+                            </button>
+                            @if (ExpandedOperationKey == operationKey)
+                            {
+                                <div class="endpoint-detail">
+                                    <p>@operation.Name endpoint generated from @ActiveSource. Open it in Request to edit parameters, body, auth, and send it.</p>
+                                    <div class="endpoint-section">
+                                        <span>Parameters</span>
+                                        <table class="spec-table">
+                                            <thead>
+                                                <tr><th>Name</th><th>In</th><th>Type</th><th>Req.</th><th>Description</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr><td>id</td><td><i class="in-badge path">path</i></td><td><i class="type-pill string">string</i></td><td>●</td><td>Resource identifier</td></tr>
+                                                <tr><td>include</td><td><i class="in-badge query">query</i></td><td><i class="type-pill string">string</i></td><td>○</td><td>Related resources to include</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="endpoint-section">
+                                        <span>Responses</span>
+                                        <div class="response-list">
+                                            <div><strong class="ok">200</strong><span>Successful response</span><em>@operation.Name</em></div>
+                                            <div><strong class="warn">401</strong><span>Missing or invalid authentication</span><em>ErrorResponse</em></div>
+                                        </div>
+                                    </div>
+                                    <div class="endpoint-actions">
+                                        <button @onclick="() => OnSelectOperation.InvokeAsync(operation)">Open in Request</button>
+                                    </div>
+                                </div>
+                            }
+                        </article>
+                    }
+                </section>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public string DocumentTitle { get; set; } = string.Empty;
+    [Parameter] public string TryFilePath { get; set; } = string.Empty;
+    [Parameter] public string ActiveSource { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<ReadableTryOperation> Operations { get; set; } = [];
+    [Parameter] public string? ExpandedOperationKey { get; set; }
+    [Parameter] public EventCallback OnShowRaw { get; set; }
+    [Parameter] public EventCallback OnLoadTryDocument { get; set; }
+    [Parameter] public EventCallback<ReadableTryOperation> OnToggleEndpoint { get; set; }
+    [Parameter] public EventCallback<ReadableTryOperation> OnSelectOperation { get; set; }
+
+    private string EndpointCardClass(ReadableTryOperation operation)
+    {
+        var key = OperationKey(operation);
+        var active = ExpandedOperationKey == key ? " expanded" : string.Empty;
+        return $"endpoint-card {operation.Method.ToLowerInvariant()}{active}";
+    }
+
+    private static string OperationKey(ReadableTryOperation operation) => $"{operation.Method}:{operation.Path}:{operation.Name}";
+
+    private static string OperationTag(string path)
+    {
+        var segment = path.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return string.IsNullOrWhiteSpace(segment)
+            ? "General"
+            : char.ToUpperInvariant(segment[0]) + segment[1..];
+    }
+}

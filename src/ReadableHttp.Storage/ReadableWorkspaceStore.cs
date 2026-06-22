@@ -19,6 +19,17 @@ public sealed class ReadableWorkspaceStore
             cancellationToken);
     }
 
+    public Task SaveWorkspaceAsync(
+        string workspacePath,
+        ReadableWorkspace workspace,
+        CancellationToken cancellationToken = default)
+    {
+        return _jsonStorage.SaveAsync(
+            Path.Combine(workspacePath, "workspace.json"),
+            workspace,
+            cancellationToken);
+    }
+
     public async Task<ReadableRequest> LoadRequestAsync(
         string workspacePath,
         string requestNameOrId,
@@ -92,6 +103,20 @@ public sealed class ReadableWorkspaceStore
                 request,
                 cancellationToken);
         }
+    }
+
+    public Task DeleteCollectionRequestsAsync(
+        string workspacePath,
+        ReadableCollection collection,
+        CancellationToken cancellationToken = default)
+    {
+        var requestDirectory = GetCollectionRequestDirectory(workspacePath, collection);
+        if (Directory.Exists(requestDirectory))
+        {
+            Directory.Delete(requestDirectory, recursive: true);
+        }
+
+        return Task.CompletedTask;
     }
 
     public async Task<ReadableEnvironment?> LoadEnvironmentAsync(

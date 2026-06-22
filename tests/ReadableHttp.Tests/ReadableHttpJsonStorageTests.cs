@@ -68,6 +68,48 @@ public sealed class ReadableHttpJsonStorageTests
     }
 
     [Fact]
+    public async Task LoadAsync_reads_expression_and_ai_variables()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"readable-http-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "environment.json");
+        await File.WriteAllTextAsync(path, """
+        {
+          "name": "dev",
+          "variables": {
+            "today": {
+              "value": null,
+              "type": "string",
+              "source": "expression",
+              "expression": "now('yyyy-MM-dd')"
+            },
+            "orderId": {
+              "value": null,
+              "type": "string",
+              "source": "ai",
+              "ai": {
+                "purpose": "testParameter",
+                "businessMeaning": "Unique order identifier",
+                "avoidPreviouslyUsedValues": true,
+                "dependsOn": [ "today" ]
+              }
+            }
+          }
+        }
+        """, TestContext.Current.CancellationToken);
+
+        var environment = await new ReadableHttpJsonStorage().LoadAsync<ReadableEnvironment>(
+            path,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ReadableVariableSource.Expression, environment.Variables["today"].Source);
+        Assert.Equal("now('yyyy-MM-dd')", environment.Variables["today"].Expression);
+        Assert.Equal(ReadableVariableSource.Ai, environment.Variables["orderId"].Source);
+        Assert.Equal("Unique order identifier", environment.Variables["orderId"].Ai?.BusinessMeaning);
+        Assert.Equal("today", Assert.Single(environment.Variables["orderId"].Ai!.DependsOn));
+    }
+
+    [Fact]
     public async Task LoadAsync_rejects_legacy_simple_variable_values()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"readable-http-{Guid.NewGuid():N}");

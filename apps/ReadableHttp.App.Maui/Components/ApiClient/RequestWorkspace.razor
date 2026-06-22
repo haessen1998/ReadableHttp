@@ -1,0 +1,299 @@
+<section class="main-stage">
+    <nav class="request-tab-strip" aria-label="Open requests">
+        @foreach (var tab in RequestTabs)
+        {
+            <button @key="tab.Id" class="@OpenTabClass(tab)" @onclick="() => OnSelectOpenTab.InvokeAsync(tab.Id)">
+                <span class="tab-origin @tab.Origin.ToString().ToLowerInvariant()"></span>
+                <strong>@tab.Title</strong>
+                @if (tab.IsDirty)
+                {
+                    <em>●</em>
+                }
+                <i @onclick:stopPropagation="true" @onclick="() => OnCloseOpenTab.InvokeAsync(tab.Id)">×</i>
+            </button>
+        }
+        <button class="new-tab-button" title="New scratch request" @onclick="OnNewScratchRequest">+</button>
+    </nav>
+
+    @if (ActiveRequestOrigin != RequestTabOrigin.Settings)
+    {
+        <header class="request-toolbar">
+            <div class="method-field @Method.ToLowerInvariant()">
+                <select value="@Method" @onchange="HandleMethodChanged">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+            <div class="url-field">
+                <input value="@Url" @onchange="HandleUrlChanged" />
+            </div>
+            <button class="send-button" @onclick="OnSend" disabled="@IsSending">Send</button>
+            <button class="save-button" @onclick="OnSaveRequest">Save</button>
+            <button class="save-as-button" @onclick="OnSaveRequestAsNew">Save As</button>
+        </header>
+    }
+
+    @if (ActiveRequestOrigin == RequestTabOrigin.Settings)
+    {
+        <section class="settings-page">
+            <header>
+                <span>Settings</span>
+                <strong>Global</strong>
+            </header>
+            <section class="settings-section">
+                <h2>Preferences</h2>
+                <label>
+                    <span>Theme</span>
+                    <select value="@SettingsDraft.ThemeMode" @onchange="HandleThemeModeChanged">
+                        <option value="@ApiClientWorkspaceState.ThemeSystem">System</option>
+                        <option value="@ApiClientWorkspaceState.ThemeLight">Light</option>
+                        <option value="@ApiClientWorkspaceState.ThemeDark">Dark</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Language</span>
+                    <select value="@SettingsDraft.Language" @onchange="HandleLanguageChanged">
+                        <option value="system">System</option>
+                        <option value="zh-CN">简体中文</option>
+                        <option value="en-US">English</option>
+                    </select>
+                </label>
+            </section>
+            <section class="settings-section">
+                <h2>System</h2>
+                <label>
+                    <span>Proxy</span>
+                    <select value="@SettingsDraft.ProxyMode" @onchange="HandleProxyModeChanged">
+                        <option value="@ApiClientWorkspaceState.ProxyNone">No proxy</option>
+                        <option value="@ApiClientWorkspaceState.ProxySystem">System proxy</option>
+                        <option value="@ApiClientWorkspaceState.ProxyCustom">Custom proxy</option>
+                    </select>
+                </label>
+                @if (SettingsDraft.ProxyMode == ApiClientWorkspaceState.ProxyCustom)
+                {
+                    <label><span>Proxy URL</span><input value="@SettingsDraft.CustomProxyUrl" @onchange="HandleCustomProxyUrlChanged" /></label>
+                    <label><span>Username</span><input value="@SettingsDraft.CustomProxyUsername" @onchange="HandleCustomProxyUsernameChanged" /></label>
+                    <label><span>Password</span><input type="password" value="@SettingsDraft.CustomProxyPassword" @onchange="HandleCustomProxyPasswordChanged" /></label>
+                }
+                <label class="settings-check"><input type="checkbox" checked="@SettingsDraft.DevToolsEnabled" @onchange="HandleDevToolsEnabledChanged" /><span>WebView developer tools</span></label>
+            </section>
+            <section class="settings-section">
+                <h2>AI</h2>
+                <p>Local assistant context is enabled. Provider settings can be added here when the AI package is wired to a runtime.</p>
+            </section>
+            <footer class="settings-footer">
+                <button class="save-button" @onclick="OnSaveSettings">Save Settings</button>
+            </footer>
+        </section>
+    }
+    else if (ViewMode == "raw")
+    {
+        <pre class="raw-view">@RawContent</pre>
+    }
+    else if (ViewMode == "preview")
+    {
+        @PreviewContent
+    }
+    else
+    {
+        <section class="request-canvas">
+            <nav class="editor-tabs" aria-label="Request editor tabs">
+                <button class="@RequestTabClass("Params")" @onclick='() => OnSetRequestTab.InvokeAsync("Params")'>Params <span>3</span></button>
+                <button class="@RequestTabClass("Headers")" @onclick='() => OnSetRequestTab.InvokeAsync("Headers")'>Headers <span>3</span></button>
+                <button class="@RequestTabClass("Auth")" @onclick='() => OnSetRequestTab.InvokeAsync("Auth")'>Auth</button>
+            </nav>
+
+            <section class="request-config">
+                @if (RequestTab == "Params")
+                {
+                    <table class="param-table">
+                        <tbody>
+                            <tr><td><span class="enabled-dot"></span></td><td>workspace</td><td>@WorkspaceName</td></tr>
+                            <tr><td><span class="enabled-dot"></span></td><td>source</td><td>@ActiveSource</td></tr>
+                            <tr><td><span class="disabled-dot"></span></td><td>operations</td><td>@OperationCount</td></tr>
+                        </tbody>
+                    </table>
+                }
+                else if (RequestTab == "Headers")
+                {
+                    <table class="param-table">
+                        <tbody>
+                            <tr><td><span class="enabled-dot"></span></td><td>Content-Type</td><td>application/json</td></tr>
+                            <tr><td><span class="enabled-dot"></span></td><td>X-Readable-Client</td><td>maui-webview</td></tr>
+                            <tr><td><span class="disabled-dot"></span></td><td>X-Workspace</td><td>@WorkspaceName</td></tr>
+                        </tbody>
+                    </table>
+                }
+                else if (RequestTab == "Auth")
+                {
+                    <div class="auth-line"><span>Bearer</span><strong>@(UseSystemProxy ? "system-proxy-enabled" : "manual")</strong></div>
+                }
+            </section>
+
+            <div class="split-editor">
+                <section class="editor-pane">
+                    <div class="pane-header">
+                        <h2>Request Body</h2>
+                        <span>JSON / raw</span>
+                    </div>
+                    <textarea value="@BodyText" @onchange="HandleBodyChanged" spellcheck="false"></textarea>
+                </section>
+                <section class="editor-pane response-pane">
+                    <div class="pane-header">
+                        <div class="response-crumbs">
+                            <button @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>root</button>
+                            @if (ResponseNodePath != "root")
+                            {
+                                <span>›</span>
+                                <button>@ResponseNodePath</button>
+                            }
+                        </div>
+                        <div class="response-meta-line">
+                            <span class="@StatusClass">@StatusText</span>
+                            <span>@(ResponseText.Length == 0 ? "0 B" : $"{ResponseText.Length} B")</span>
+                        </div>
+                    </div>
+                    <div class="response-pipeline">
+                        <div class="pipeline-heading compact">
+                            <span>HttpClient Pipeline</span>
+                            <strong>@PipelineTotalLabel</strong>
+                        </div>
+                        @if (PipelinePhases.Count == 0)
+                        {
+                            <div class="pipeline-empty">Send a request to capture stage timings.</div>
+                        }
+                        else
+                        {
+                            <div class="pipeline-strip">
+                                @foreach (var phase in PipelinePhases)
+                                {
+                                    <span @key="phase" style="width:@phase.Width%; background:@phase.Color" title="@($"{phase.Label} · {phase.Duration}")"></span>
+                                }
+                            </div>
+                            <div class="pipeline-legend">
+                                @foreach (var phase in PipelinePhases)
+                                {
+                                    <span @key="phase"><i style="background:@phase.Color"></i>@phase.Label <em>@phase.Duration</em></span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    @if (string.IsNullOrWhiteSpace(ResponseText))
+                    {
+                        <div class="response-empty">
+                            <strong>@StatusText</strong>
+                            <span>@Method @Url</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="response-body">
+                            @if (ResponseNodeKeys.Count > 0)
+                            {
+                                <div class="json-node-bar">
+                                    <button class="@ResponseNodeClass("root")" @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>root</button>
+                                    @foreach (var node in ResponseNodeKeys)
+                                    {
+                                        <button @key="node" class="@ResponseNodeClass(node)" @onclick="() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs(node))">@node</button>
+                                    }
+                                </div>
+                            }
+                            <pre>@SelectedResponseText</pre>
+                        </div>
+                    }
+                </section>
+            </div>
+        </section>
+    }
+</section>
+
+@code {
+    [Parameter] public string Method { get; set; } = "GET";
+    [Parameter] public EventCallback<string> MethodChanged { get; set; }
+    [Parameter] public string Url { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> UrlChanged { get; set; }
+    [Parameter] public string BodyText { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> BodyTextChanged { get; set; }
+    [Parameter] public bool IsSending { get; set; }
+    [Parameter] public string ViewMode { get; set; } = "request";
+    [Parameter] public string RawContent { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? PreviewContent { get; set; }
+    [Parameter] public string RequestTab { get; set; } = "Params";
+    [Parameter] public string WorkspaceName { get; set; } = "scratch";
+    [Parameter] public string ActiveSource { get; set; } = "Request";
+    [Parameter] public int OperationCount { get; set; }
+    [Parameter] public bool UseSystemProxy { get; set; }
+    [Parameter] public string ResponseNodePath { get; set; } = "root";
+    [Parameter] public string StatusClass { get; set; } = "status-chip";
+    [Parameter] public string StatusText { get; set; } = "Ready";
+    [Parameter] public string ResponseText { get; set; } = string.Empty;
+    [Parameter] public string PipelineTotalLabel { get; set; } = "no trace";
+    [Parameter] public IReadOnlyList<PipelinePhase> PipelinePhases { get; set; } = [];
+    [Parameter] public IReadOnlyList<string> ResponseNodeKeys { get; set; } = [];
+    [Parameter] public string SelectedResponseText { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<RequestWorkspaceTab> RequestTabs { get; set; } = [];
+    [Parameter] public string? ActiveRequestTabId { get; set; }
+    [Parameter] public RequestTabOrigin? ActiveRequestOrigin { get; set; }
+    [Parameter] public AppSettingsDraft SettingsDraft { get; set; } = new();
+    [Parameter] public EventCallback OnSend { get; set; }
+    [Parameter] public EventCallback OnSaveRequest { get; set; }
+    [Parameter] public EventCallback OnSaveRequestAsNew { get; set; }
+    [Parameter] public EventCallback OnNewScratchRequest { get; set; }
+    [Parameter] public EventCallback OnSaveSettings { get; set; }
+    [Parameter] public EventCallback<string> ThemeModeChanged { get; set; }
+    [Parameter] public EventCallback<string> ProxyModeChanged { get; set; }
+    [Parameter] public EventCallback<string> CustomProxyUrlChanged { get; set; }
+    [Parameter] public EventCallback<string> CustomProxyUsernameChanged { get; set; }
+    [Parameter] public EventCallback<string> CustomProxyPasswordChanged { get; set; }
+    [Parameter] public EventCallback<bool> DevToolsEnabledChanged { get; set; }
+    [Parameter] public EventCallback<string> LanguageChanged { get; set; }
+    [Parameter] public EventCallback<string> OnSelectOpenTab { get; set; }
+    [Parameter] public EventCallback<string> OnCloseOpenTab { get; set; }
+    [Parameter] public EventCallback<string> OnSetRequestTab { get; set; }
+    [Parameter] public EventCallback<ResponseNodeSelectedEventArgs> OnSelectResponseNode { get; set; }
+
+    private async Task HandleMethodChanged(ChangeEventArgs args)
+    {
+        await MethodChanged.InvokeAsync(Convert.ToString(args.Value) ?? "GET");
+    }
+
+    private async Task HandleUrlChanged(ChangeEventArgs args)
+    {
+        await UrlChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleBodyChanged(ChangeEventArgs args)
+    {
+        await BodyTextChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleThemeModeChanged(ChangeEventArgs args) => await ThemeModeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.ThemeSystem);
+
+    private async Task HandleProxyModeChanged(ChangeEventArgs args) => await ProxyModeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.ProxySystem);
+
+    private async Task HandleCustomProxyUrlChanged(ChangeEventArgs args) => await CustomProxyUrlChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleCustomProxyUsernameChanged(ChangeEventArgs args) => await CustomProxyUsernameChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleCustomProxyPasswordChanged(ChangeEventArgs args) => await CustomProxyPasswordChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleDevToolsEnabledChanged(ChangeEventArgs args) => await DevToolsEnabledChanged.InvokeAsync(args.Value is bool value && value);
+
+    private async Task HandleLanguageChanged(ChangeEventArgs args) => await LanguageChanged.InvokeAsync(Convert.ToString(args.Value) ?? "system");
+
+    private string RequestTabClass(string key) => RequestTab == key ? "active" : string.Empty;
+
+    private string OpenTabClass(RequestWorkspaceTab tab)
+    {
+        return string.Equals(ActiveRequestTabId, tab.Id, StringComparison.Ordinal)
+            ? "open-request-tab active"
+            : "open-request-tab";
+    }
+
+    private string ResponseNodeClass(string path) => string.Equals(ResponseNodePath, path, StringComparison.Ordinal)
+        ? "active"
+        : string.Empty;
+}

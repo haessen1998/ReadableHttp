@@ -1,0 +1,296 @@
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+}
+
+html {
+    color-scheme: dark;
+}
+
+body {
+    overflow: hidden;
+    font-family: "OpenSansRegular", "Segoe UI", Arial, sans-serif;
+    background: #101217;
+    color: #d8dee9;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+input,
+select,
+textarea {
+    box-sizing: border-box;
+}
+
+button {
+    cursor: pointer;
+}
+
+button,
+input,
+select,
+textarea {
+    transition:
+        border-color 120ms ease,
+        background-color 120ms ease,
+        color 120ms ease,
+        box-shadow 120ms ease,
+        opacity 120ms ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+::selection {
+    background: var(--selection-bg);
+    color: var(--selection-text);
+}
+
+.api-client-shell {
+    --bg: #101217;
+    --surface: #151923;
+    --panel: #181d28;
+    --panel-2: #1f2531;
+    --panel-3: #293140;
+    --line: rgba(151, 164, 188, 0.22);
+    --line-soft: rgba(151, 164, 188, 0.12);
+    --text: #d8dee9;
+    --muted: #9aa6b8;
+    --muted-2: #6f7b8d;
+    --accent: #4f8cff;
+    --accent-2: #20b486;
+    --accent-soft: rgba(79, 140, 255, 0.16);
+    --focus-ring: rgba(79, 140, 255, 0.58);
+    --selection-bg: rgba(79, 140, 255, 0.32);
+    --selection-text: #ffffff;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --code-bg: #111722;
+    --shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    --sidebar-width: clamp(236px, 20vw, 320px);
+    --inspector-width: clamp(292px, 24vw, 420px);
+    --control-radius: 5px;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    height: 100%;
+    min-width: 0;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 160px),
+        var(--bg);
+    color: var(--text);
+    position: relative;
+}
+
+.api-client-shell.theme-light {
+    --bg: #eef2f7;
+    --surface: #f7f9fc;
+    --panel: #ffffff;
+    --panel-2: #f5f7fb;
+    --panel-3: #e9eef6;
+    --line: #cbd5e1;
+    --line-soft: #e2e8f0;
+    --text: #172033;
+    --muted: #5d6879;
+    --muted-2: #7b8797;
+    --accent: #2668d9;
+    --accent-2: #0f8a64;
+    --accent-soft: rgba(38, 104, 217, 0.12);
+    --focus-ring: rgba(38, 104, 217, 0.42);
+    --selection-bg: rgba(38, 104, 217, 0.22);
+    --selection-text: #0f172a;
+    --code-bg: #ffffff;
+    --shadow: 0 18px 44px rgba(42, 55, 80, 0.16);
+}
+
+.client-workbench {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid var(--line-soft);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.edge-toggle {
+    position: absolute;
+    top: 50%;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 64px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--accent);
+    font-size: 20px;
+    transform: translateY(-50%);
+    box-shadow: var(--shadow);
+}
+
+.edge-toggle.left {
+    left: 0;
+    border-left: 0;
+    border-radius: 0 7px 7px 0;
+}
+
+.edge-toggle.right {
+    right: 0;
+    border-right: 0;
+    border-radius: 7px 0 0 7px;
+}
+
+.icon-button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: var(--control-radius);
+    background: transparent;
+    color: var(--muted);
+}
+
+.icon-button:hover {
+    background: var(--panel-3);
+    color: var(--text);
+}
+
+.method {
+    border-radius: var(--control-radius);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
+    text-align: center;
+}
+
+.method.tiny {
+    border-radius: 3px;
+    font-size: 8px;
+    padding: 2px 4px;
+}
+
+.method.get {
+    background: #2668d9;
+}
+
+.method.post {
+    background: #16895a;
+}
+
+.method.put,
+.method.patch {
+    background: #b26a00;
+}
+
+.method.delete {
+    background: #c43b3b;
+}
+
+.accent-button,
+.ghost-button {
+    height: 34px;
+    border: 1px solid transparent;
+    border-radius: var(--control-radius);
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.accent-button {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white), var(--accent));
+    color: #ffffff;
+}
+
+.accent-button:hover {
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.ghost-button {
+    border-color: var(--line);
+    background: var(--panel-2);
+    color: var(--muted);
+}
+
+.ghost-button:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    background: var(--panel-3);
+    color: var(--text);
+}
+
+.accent-button:disabled,
+.ghost-button:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.status-chip {
+    color: var(--muted);
+}
+
+.status-chip.success {
+    border-color: rgba(34, 197, 94, 0.36);
+    background: rgba(34, 197, 94, 0.12);
+    color: var(--success);
+}
+
+.status-chip.error {
+    border-color: rgba(239, 68, 68, 0.36);
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--danger);
+}
+
+.status-chip.sending {
+    border-color: rgba(79, 140, 255, 0.38);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.api-client-shell.theme-light .request-toolbar,
+.api-client-shell.theme-light .response-pipeline,
+.api-client-shell.theme-light .spec-table th,
+.api-client-shell.theme-light .response-list div,
+.api-client-shell.theme-light .swagger-stage,
+.api-client-shell.theme-light .schema-tree,
+.api-client-shell.theme-light .doc-code {
+    background: var(--panel);
+}
+
+.api-client-shell.theme-light textarea,
+.api-client-shell.theme-light .editor-pane pre,
+.api-client-shell.theme-light .response-empty,
+.api-client-shell.theme-light .raw-view {
+    background: #ffffff;
+    color: var(--text);
+}
+
+.api-client-shell.theme-light .pipeline-strip {
+    background: #e8eef6;
+}
+
+.api-client-shell.theme-light .json-node-bar,
+.api-client-shell.theme-light .pipeline-empty {
+    background: #f7f9fc;
+}
+
+@media (max-width: 1220px) {
+    .client-workbench {
+        display: block;
+    }
+}

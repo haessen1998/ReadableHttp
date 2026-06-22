@@ -1,0 +1,262 @@
+@using ReadableHttp.Try
+
+<aside class="right-panel">
+    <nav class="right-panel-tabs" aria-label="Right panel">
+        <button class="@PanelButtonClass(RightPanelMode.Docs)" title="文档" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Docs)">Doc</button>
+        <button class="@PanelButtonClass(RightPanelMode.Ai)" title="AI 对话" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Ai)">AI</button>
+        <button class="@PanelButtonClass(RightPanelMode.Parameters)" title="参数和上下文" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Parameters)">Params</button>
+        <button class="@PanelButtonClass(RightPanelMode.Settings)" title="设置" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Settings)">Set</button>
+        <button class="collapse-button" title="隐藏右栏" @onclick="OnToggleInspector">×</button>
+    </nav>
+
+    @if (Mode == RightPanelMode.Docs)
+    {
+        <section class="panel-content">
+            <header class="panel-title">
+                <span>Documentation</span>
+                <strong>@(ViewMode == "preview" ? "Spec" : "Request")</strong>
+            </header>
+            <section class="doc-block">
+                <div class="doc-overview">
+                    <strong>@DocumentTitle</strong>
+                    <span>@TryFilePath</span>
+                    <p>@DocsSummary</p>
+                </div>
+            </section>
+            <section class="doc-block">
+                <h3>Operations</h3>
+                <div class="operation-mini-list">
+                    @foreach (var operation in Operations.Take(8))
+                    {
+                        <button @key="operation" @onclick="() => OnSelectOperation.InvokeAsync(operation)">
+                            <span class="method tiny @operation.Method.ToLowerInvariant()">@operation.Method</span>
+                            <strong>@operation.Path</strong>
+                        </button>
+                    }
+                    @if (Operations.Count == 0)
+                    {
+                        <div class="empty-copy">Import a spec to view operations.</div>
+                    }
+                </div>
+            </section>
+            <section class="doc-block">
+                <h3>Response</h3>
+                <div class="schema-tree">
+                    <div><span>·</span><strong>@StatusText</strong><em>@PipelineTotalLabel</em></div>
+                    @foreach (var phase in PipelinePhases)
+                    {
+                        <div class="nested" @key="phase"><span>├─</span><strong>@phase.Label</strong><em>@phase.Duration</em></div>
+                    }
+                </div>
+            </section>
+        </section>
+    }
+    else if (Mode == RightPanelMode.Ai)
+    {
+        <section class="panel-content ai-panel">
+            <header class="panel-title">
+                <span>AI Assistant</span>
+                <strong>Local</strong>
+            </header>
+            <div class="ai-context">
+                <span>@Method</span>
+                <strong>@Url</strong>
+            </div>
+            <div class="chat-log">
+                @foreach (var message in AiMessages)
+                {
+                    <div @key="message" class="chat-message @message.Role">
+                        <strong>@message.Role</strong>
+                        <p>@message.Content</p>
+                    </div>
+                }
+            </div>
+            <footer class="chat-input">
+                <textarea value="@AiDraft" @onchange="HandleAiDraftChanged" placeholder="Ask about this request..." />
+                <button class="accent-button" @onclick="OnSendAiMessage">Send</button>
+            </footer>
+        </section>
+    }
+    else if (Mode == RightPanelMode.Parameters)
+    {
+        <section class="panel-content">
+            <header class="panel-title">
+                <span>Parameters</span>
+                <strong>@ActiveSource</strong>
+            </header>
+            <section class="doc-block">
+                <h3>Request</h3>
+                <dl class="property-list">
+                    <div><dt>Method</dt><dd>@Method</dd></div>
+                    <div><dt>URL</dt><dd>@Url</dd></div>
+                    <div><dt>Body</dt><dd>@BodySummary</dd></div>
+                    <div><dt>Status</dt><dd>@StatusText</dd></div>
+                </dl>
+            </section>
+            <section class="doc-block">
+                <h3>Environment</h3>
+                <dl class="property-list">
+                    <div><dt>Workspace</dt><dd>@WorkspaceName</dd></div>
+                    <div><dt>Proxy</dt><dd>@ProxyLabel</dd></div>
+                    <div><dt>Spec</dt><dd>@TryFilePath</dd></div>
+                </dl>
+            </section>
+            <section class="doc-block">
+                <h3>Activity</h3>
+                <div class="activity-list">
+                    @foreach (var entry in ActivityLog.Take(5))
+                    {
+                        <div class="activity-card" @key="entry">
+                            <strong>@entry.Title</strong>
+                            <span>@entry.Detail</span>
+                        </div>
+                    }
+                </div>
+            </section>
+        </section>
+    }
+    else if (Mode == RightPanelMode.Settings)
+    {
+        <section class="panel-content">
+            <header class="panel-title">
+                <span>Settings</span>
+                <strong>App</strong>
+            </header>
+            <section class="doc-block settings-block">
+                <h3>Preferences</h3>
+                <label class="settings-field">
+                    <span>Theme</span>
+                    <select value="@SettingsDraft.ThemeMode" @onchange="HandleThemeModeChanged">
+                        <option value="@ApiClientWorkspaceState.ThemeSystem">System</option>
+                        <option value="@ApiClientWorkspaceState.ThemeLight">Light</option>
+                        <option value="@ApiClientWorkspaceState.ThemeDark">Dark</option>
+                    </select>
+                </label>
+                <label class="settings-field">
+                    <span>Proxy</span>
+                    <select value="@SettingsDraft.ProxyMode" @onchange="HandleProxyModeChanged">
+                        <option value="@ApiClientWorkspaceState.ProxyNone">No proxy</option>
+                        <option value="@ApiClientWorkspaceState.ProxySystem">System proxy</option>
+                        <option value="@ApiClientWorkspaceState.ProxyCustom">Custom proxy</option>
+                    </select>
+                </label>
+                @if (SettingsDraft.ProxyMode == ApiClientWorkspaceState.ProxyCustom)
+                {
+                    <label class="settings-field">
+                        <span>Proxy URL</span>
+                        <input value="@SettingsDraft.CustomProxyUrl" @onchange="HandleCustomProxyUrlChanged" placeholder="http://127.0.0.1:7890" />
+                    </label>
+                    <label class="settings-field">
+                        <span>Username</span>
+                        <input value="@SettingsDraft.CustomProxyUsername" @onchange="HandleCustomProxyUsernameChanged" />
+                    </label>
+                    <label class="settings-field">
+                        <span>Password</span>
+                        <input type="password" value="@SettingsDraft.CustomProxyPassword" @onchange="HandleCustomProxyPasswordChanged" />
+                    </label>
+                }
+                <label><input type="checkbox" checked="@SettingsDraft.DevToolsEnabled" @onchange="HandleDevToolsEnabledChanged" /> WebView dev tools</label>
+                <label class="settings-field">
+                    <span>Language</span>
+                    <select value="@SettingsDraft.Language" @onchange="HandleLanguageChanged">
+                        <option value="system">System</option>
+                        <option value="zh-CN">简体中文</option>
+                        <option value="en-US">English</option>
+                    </select>
+                </label>
+                <button class="accent-button" @onclick="OnSaveSettings">Save Settings</button>
+            </section>
+        </section>
+    }
+</aside>
+
+@code {
+    [Parameter] public RightPanelMode Mode { get; set; }
+    [Parameter] public string ViewMode { get; set; } = "request";
+    [Parameter] public string DocumentTitle { get; set; } = string.Empty;
+    [Parameter] public string TryFilePath { get; set; } = string.Empty;
+    [Parameter] public string ActiveSource { get; set; } = "Request";
+    [Parameter] public IReadOnlyList<ReadableTryOperation> Operations { get; set; } = [];
+    [Parameter] public IReadOnlyList<PipelinePhase> PipelinePhases { get; set; } = [];
+    [Parameter] public string PipelineTotalLabel { get; set; } = "no trace";
+    [Parameter] public string Method { get; set; } = "GET";
+    [Parameter] public string Url { get; set; } = string.Empty;
+    [Parameter] public string BodyText { get; set; } = string.Empty;
+    [Parameter] public string StatusText { get; set; } = "Ready";
+    [Parameter] public string WorkspaceName { get; set; } = "scratch";
+    [Parameter] public string ProxyMode { get; set; } = ApiClientWorkspaceState.ProxySystem;
+    [Parameter] public AppSettingsDraft SettingsDraft { get; set; } = new();
+    [Parameter] public EventCallback<string> ThemeModeChanged { get; set; }
+    [Parameter] public EventCallback<string> ProxyModeChanged { get; set; }
+    [Parameter] public EventCallback<string> CustomProxyUrlChanged { get; set; }
+    [Parameter] public EventCallback<string> CustomProxyUsernameChanged { get; set; }
+    [Parameter] public EventCallback<string> CustomProxyPasswordChanged { get; set; }
+    [Parameter] public EventCallback<bool> DevToolsEnabledChanged { get; set; }
+    [Parameter] public EventCallback<string> LanguageChanged { get; set; }
+    [Parameter] public IReadOnlyList<ActivityEntry> ActivityLog { get; set; } = [];
+    [Parameter] public IReadOnlyList<AiChatMessage> AiMessages { get; set; } = [];
+    [Parameter] public string AiDraft { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> AiDraftChanged { get; set; }
+    [Parameter] public EventCallback<RightPanelMode> OnSelectMode { get; set; }
+    [Parameter] public EventCallback OnToggleInspector { get; set; }
+    [Parameter] public EventCallback<ReadableTryOperation> OnSelectOperation { get; set; }
+    [Parameter] public EventCallback OnSendAiMessage { get; set; }
+    [Parameter] public EventCallback OnSaveSettings { get; set; }
+
+    private string DocsSummary => ViewMode == "preview"
+        ? $"Imported API document with {Operations.Count} operations."
+        : "Current request context, response timings, and generated documentation.";
+
+    private string BodySummary => string.IsNullOrWhiteSpace(BodyText)
+        ? "Empty"
+        : $"{BodyText.Length} chars";
+
+    private string ProxyLabel => ProxyMode switch
+    {
+        ApiClientWorkspaceState.ProxyNone => "No proxy",
+        ApiClientWorkspaceState.ProxyCustom => "Custom proxy",
+        _ => "System proxy"
+    };
+
+    private string PanelButtonClass(RightPanelMode mode) => Mode == mode ? "active" : string.Empty;
+
+    private async Task HandleAiDraftChanged(ChangeEventArgs args)
+    {
+        await AiDraftChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleThemeModeChanged(ChangeEventArgs args)
+    {
+        await ThemeModeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.ThemeSystem);
+    }
+
+    private async Task HandleProxyModeChanged(ChangeEventArgs args)
+    {
+        await ProxyModeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.ProxySystem);
+    }
+
+    private async Task HandleCustomProxyUrlChanged(ChangeEventArgs args)
+    {
+        await CustomProxyUrlChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleCustomProxyUsernameChanged(ChangeEventArgs args)
+    {
+        await CustomProxyUsernameChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleCustomProxyPasswordChanged(ChangeEventArgs args)
+    {
+        await CustomProxyPasswordChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleDevToolsEnabledChanged(ChangeEventArgs args)
+    {
+        await DevToolsEnabledChanged.InvokeAsync(args.Value is bool value && value);
+    }
+
+    private async Task HandleLanguageChanged(ChangeEventArgs args)
+    {
+        await LanguageChanged.InvokeAsync(Convert.ToString(args.Value) ?? "system");
+    }
+}

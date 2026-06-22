@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "id": "a42c54fb83d74198ba252f46202100d0",
+  "name": "New Collection 2 Request 1",
+  "method": "GET",
+  "url": "https://httpbin.org/get",
+  "pathParameters": [],
+  "query": [],
+  "headers": [],
+  "body": null,
+  "auth": null,
+  "options": {
+    "timeout": null,
+    "followRedirects": null,
+    "useCookies": null,
+    "ignoreSslErrors": null,
+    "proxy": null
+  },
+  "variables": {}
+}

@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.FluentUI.AspNetCore.Components;
+using ReadableHttp.App.Maui.Components.ApiClient;
 
 namespace ReadableHttp.App.Maui;
 
@@ -16,9 +16,9 @@ public static class MauiProgram
             });
 
         builder.Services.AddMauiBlazorWebView();
-        builder.Services.AddFluentUIComponents();
         builder.Services.AddSingleton<AppSettingsStore>();
         builder.Services.AddSingleton<AppFilePicker>();
+        builder.Services.AddSingleton<ApiClientWorkspaceState>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

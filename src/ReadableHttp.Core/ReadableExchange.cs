@@ -15,6 +15,8 @@ public sealed class ReadableExchange
     public DateTimeOffset StartedAt { get; set; }
 
     public DateTimeOffset FinishedAt { get; set; }
+
+    public List<ReadableExchangeTiming> Timings { get; set; } = [];
 }
 
 public sealed class ReadableExecutionError
@@ -22,4 +24,13 @@ public sealed class ReadableExecutionError
     public string Type { get; set; } = string.Empty;
 
     public string Message { get; set; } = string.Empty;
+}
+
+public sealed class ReadableExchangeTiming
+{
+    public string Name { get; set; } = string.Empty;
+
+    public TimeSpan StartOffset { get; set; }
+
+    public TimeSpan Duration { get; set; }
 }
