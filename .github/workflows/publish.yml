@@ -1,6 +1,9 @@
 name: Publish NuGet
 
 on:
+  push:
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       publish:
@@ -55,7 +58,7 @@ jobs:
           path: publish/nugets/*.nupkg
 
       - name: Publish to nuget.org
-        if: ${{ inputs.publish == 'true' }}
+        if: ${{ github.event_name == 'push' || inputs.publish == 'true' }}
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: dotnet nuget push "publish/nugets/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
