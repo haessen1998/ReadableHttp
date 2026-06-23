@@ -67,18 +67,21 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
 
         try
         {
+            using var timeoutCancellation = CreateTimeoutCancellationTokenSource(context, cancellationToken);
+            var effectiveCancellationToken = timeoutCancellation?.Token ?? cancellationToken;
+
             var clientStarted = stopwatch.Elapsed;
             using var httpClient = CreateHttpClient(context);
             AddTiming(timings, "Create HttpClient", clientStarted, stopwatch.Elapsed);
 
             var sendStarted = stopwatch.Elapsed;
-            var result = await SendWithRedirectsAsync(httpClient, exchange.Request, context, cancellationToken);
+            var result = await SendWithRedirectsAsync(httpClient, exchange.Request, context, effectiveCancellationToken);
             AddTiming(timings, "Send HTTP", sendStarted, stopwatch.Elapsed);
             exchange.RawRequestPreview = result.RawRequestPreview;
             using var response = result.Response;
 
             var readStarted = stopwatch.Elapsed;
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            var bytes = await response.Content.ReadAsByteArrayAsync(effectiveCancellationToken);
             AddTiming(timings, "Read Response", readStarted, stopwatch.Elapsed);
             stopwatch.Stop();
 
@@ -138,9 +141,14 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
         context ??= new ReadableExecutionContext();
         options ??= new ReadableStreamOptions();
 
+        var resolvedRequest = ReadableRequestVariableResolver.Resolve(request, context);
+        ApplyRequestOptions(resolvedRequest, context);
+        using var timeoutCancellation = CreateTimeoutCancellationTokenSource(context, cancellationToken);
+        var effectiveCancellationToken = timeoutCancellation?.Token ?? cancellationToken;
+
         using var httpClient = CreateHttpClient(context);
         using var httpRequest = ReadableHttpRequestMessageFactory.Create(
-            ReadableRequestVariableResolver.Resolve(request, context),
+            resolvedRequest,
             context);
 
         HttpResponseMessage? response = null;
@@ -149,7 +157,7 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
             response = await httpClient.SendAsync(
                 httpRequest,
                 HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
+                effectiveCancellationToken);
 
             yield return new ReadableStreamMessage
             {
@@ -160,25 +168,25 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
             };
 
             var format = ResolveStreamFormat(options.Format, response.Content.Headers.ContentType);
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            await using var stream = await response.Content.ReadAsStreamAsync(effectiveCancellationToken);
 
             if (format == ReadableStreamFormat.Raw)
             {
-                await foreach (var message in ReadRawStreamAsync(stream, options.BufferSize, cancellationToken))
+                await foreach (var message in ReadRawStreamAsync(stream, options.BufferSize, effectiveCancellationToken))
                 {
                     yield return message;
                 }
             }
             else if (format == ReadableStreamFormat.ServerSentEvents)
             {
-                await foreach (var message in ReadServerSentEventsAsync(stream, cancellationToken))
+                await foreach (var message in ReadServerSentEventsAsync(stream, effectiveCancellationToken))
                 {
                     yield return message;
                 }
             }
             else
             {
-                await foreach (var message in ReadLinesAsync(stream, cancellationToken))
+                await foreach (var message in ReadLinesAsync(stream, effectiveCancellationToken))
                 {
                     yield return message;
                 }
@@ -205,7 +213,11 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
                 client.BaseAddress = context.BaseAddress;
             }
 
-            client.Timeout = context.Timeout;
+            if (context.HasTimeoutOverride)
+            {
+                client.Timeout = context.Timeout;
+            }
+
             return client;
         }
 
@@ -213,11 +225,28 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
 
         var httpClient = new HttpClient(handler, disposeHandler: _handler is null)
         {
-            BaseAddress = context.BaseAddress,
-            Timeout = context.Timeout
+            BaseAddress = context.BaseAddress
         };
+        if (context.HasTimeoutOverride)
+        {
+            httpClient.Timeout = context.Timeout;
+        }
 
         return httpClient;
+    }
+
+    private static CancellationTokenSource? CreateTimeoutCancellationTokenSource(
+        ReadableExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!context.HasTimeoutOverride || context.Timeout == Timeout.InfiniteTimeSpan)
+        {
+            return null;
+        }
+
+        var timeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCancellation.CancelAfter(context.Timeout);
+        return timeoutCancellation;
     }
 
     private static HttpClientHandler CreateHandler(ReadableExecutionContext context)

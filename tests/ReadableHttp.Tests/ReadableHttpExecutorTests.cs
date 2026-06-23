@@ -296,6 +296,77 @@ public sealed class ReadableHttpExecutorTests
     }
 
     [Fact]
+    public async Task SendAsync_preserves_factory_client_timeout_when_timeout_is_not_explicit()
+    {
+        HttpClient? client = null;
+        var handler = new MockHttpMessageHandler((_, _) =>
+        {
+            Assert.Equal(TimeSpan.FromSeconds(7), client!.Timeout);
+            return Task.FromResult(MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}"));
+        });
+        var executor = new ReadableHttpExecutor(() =>
+        {
+            client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(7)
+            };
+            return client;
+        });
+
+        var exchange = await executor.SendAsync(
+            new ReadableRequest
+            {
+                Method = "GET",
+                Url = "https://api.example.test/timeout"
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Null(exchange.Error);
+    }
+
+    [Fact]
+    public async Task StreamAsync_applies_request_timeout_option()
+    {
+        HttpClient? client = null;
+        var handler = new MockHttpMessageHandler((_, _) =>
+        {
+            Assert.Equal(TimeSpan.FromSeconds(9), client!.Timeout);
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("line 1\n")
+            };
+            response.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/plain");
+            return Task.FromResult(response);
+        });
+        var executor = new ReadableHttpExecutor(() =>
+        {
+            client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(7)
+            };
+            return client;
+        });
+
+        var messages = new List<ReadableStreamMessage>();
+        await foreach (var message in executor.StreamAsync(
+            new ReadableRequest
+            {
+                Method = "GET",
+                Url = "https://api.example.test/stream",
+                Options = new ReadableRequestOptions
+                {
+                    Timeout = TimeSpan.FromSeconds(9)
+                }
+            },
+            cancellationToken: TestContext.Current.CancellationToken))
+        {
+            messages.Add(message);
+        }
+
+        Assert.Contains(messages, message => message.Type == ReadableStreamMessageType.Data);
+    }
+
+    [Fact]
     public async Task SendAsync_applies_path_parameters_and_reads_cookies()
     {
         var handler = new MockHttpMessageHandler((_, _) =>

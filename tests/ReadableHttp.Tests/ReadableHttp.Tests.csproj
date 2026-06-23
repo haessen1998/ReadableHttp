@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ReadableHttp.Core\ReadableHttp.Core.csproj" />
     <ProjectReference Include="..\..\src\ReadableHttp.Auth\ReadableHttp.Auth.csproj" />
+    <ProjectReference Include="..\..\src\ReadableHttp.AspNetCore\ReadableHttp.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\ReadableHttp.Execution\ReadableHttp.Execution.csproj" />
     <ProjectReference Include="..\..\src\ReadableHttp.ImportExport\ReadableHttp.ImportExport.csproj" />
     <ProjectReference Include="..\..\src\ReadableHttp.Storage\ReadableHttp.Storage.csproj" />
