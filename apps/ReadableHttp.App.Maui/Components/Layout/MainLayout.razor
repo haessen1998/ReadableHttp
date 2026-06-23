@@ -38,6 +38,7 @@
                              OnNewCollection="@State.NewCollection"
                              OnPickWorkspace="@State.PickWorkspaceAsync"
                              OnNewWorkspace="@State.NewWorkspaceAsync"
+                             OnNewRemoteWorkspace="@State.NewRemoteWorkspaceAsync"
                              WorkspaceAutoInitialize="@State.WorkspaceAutoInitialize"
                              WorkspaceAutoInitializeChanged="@((value) => State.WorkspaceAutoInitialize = value)"
                              OnLoadWorkspace="@State.LoadWorkspaceAsync"
@@ -50,11 +51,13 @@
                              OnGitPull="@State.GitPullAsync"
                              OnGitPush="@State.GitPushAsync"
                              OnSelectWorkspace="@State.SelectWorkspaceAsync"
+                             OnOpenWorkspaceConfig="@State.OpenWorkspaceConfigAsync"
                              OnToggleWorkspaceSection="@State.ToggleWorkspaceSection"
                              OnToggleCollectionsSection="@State.ToggleCollectionsSection"
                              OnToggleSpecsSection="@State.ToggleSpecsSection"
                              OnToggleRecentSection="@State.ToggleRecentSection"
                              OnSelectCollection="@State.SelectCollectionAsync"
+                             OnOpenCollectionConfig="@State.OpenCollectionConfigAsync"
                              OnSelectRequest="@State.SelectRequestAsync"
                              OnNewRequestInCollection="@State.NewRequestInCollectionAsync"
                              OnDuplicateCollection="@State.DuplicateCollectionAsync"
@@ -65,11 +68,14 @@
                              OnOpenRequestDefault="@State.OpenRequestDefault"
                              OnShowRequest="@State.ShowRequest"
                              OnPickTryFile="@State.PickTryFileAsync"
+                             OnNewRemoteSpecification="@State.NewRemoteSpecificationAsync"
                              OnLoadTryDocument="@State.LoadTryDocumentAsync"
                              OnSelectSpec="@State.SelectSpecAsync"
                              OnSelectSpecification="@State.SelectSpecificationAsync"
                              OnRefreshSpecification="@State.RefreshSpecificationAsync"
                              OnOpenSpecificationInExplorer="@State.OpenSpecificationInExplorer"
+                             OnDuplicateSpecification="@State.DuplicateSpecificationAsync"
+                             OnDeleteSpecification="@State.DeleteSpecificationAsync"
                              OnShowRaw="@State.ShowRaw"
                              OnSelectSession="@State.SelectSession"
                              OnToggleExplorer="@State.ToggleExplorer" />
@@ -115,10 +121,10 @@
 </main>
 
 @code {
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        State.Initialize();
         State.Changed += HandleStateChanged;
+        await State.InitializeAsync();
     }
 
     private async void HandleStateChanged()

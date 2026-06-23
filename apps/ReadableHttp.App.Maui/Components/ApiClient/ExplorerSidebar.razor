@@ -1,16 +1,31 @@
 @using ReadableHttp.Core
+@using System.Text.Json
 
-<aside class="sidebar-panel">
+<aside class="sidebar-panel" @onclick="CloseFlyouts">
+    @if (HasOpenFlyout)
+    {
+        <button class="sidebar-flyout-backdrop" title="Close menu" @onclick="CloseFlyouts"></button>
+    }
+
     <header class="sidebar-brand">
-        <button class="brand-button" title="Workspace" @onclick="ToggleWorkspaceMenu">
+        <button class="brand-button" title="Toggle workspaces" @onclick="ToggleWorkspaceMenu">
             <span class="brand-mark">R</span>
             <span class="brand-copy">
                 <strong>@(WorkspaceName ?? "No workspace")</strong>
                 <small>@WorkspaceTypeLabel</small>
             </span>
-            <span class="brand-caret">@(workspaceMenuOpen ? "▾" : "▸")</span>
         </button>
+        <button class="brand-toggle" title="Toggle workspaces" @onclick="ToggleWorkspaceMenu">@(workspaceMenuOpen ? "▾" : "▸")</button>
     </header>
+
+    <section class="sidebar-search">
+        <span>⌕</span>
+        <input value="@searchText" @oninput="HandleSearchChanged" placeholder="Search" />
+        @if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            <button title="Clear search" @onclick="ClearSearch">×</button>
+        }
+    </section>
 
     @if (workspaceMenuOpen)
     {
@@ -20,8 +35,12 @@
                     <span>▾</span>
                     <strong>Workspaces</strong>
                 </span>
-                <div class="title-actions">
-                    <button title="New workspace" @onclick="OnNewWorkspace">＋</button>
+                <div class='@TitleActionsClass(MenuKey("add", "workspace"))' @onclick:stopPropagation="true">
+                    <button title="New workspace" @onclick='() => ToggleMore(MenuKey("add", "workspace"))'>＋</button>
+                    <div class="more-menu">
+                        <button @onclick="OnNewWorkspace">Local workspace</button>
+                        <button @onclick="OnNewRemoteWorkspace">Remote workspace</button>
+                    </div>
                 </div>
             </div>
             <div class="workspace-list">
@@ -33,10 +52,10 @@
                             <span class="check-mark"></span>
                             <span>@WorkspaceLabel(item)</span>
                         </button>
-                        <div class="row-actions">
-                            <button title="More">···</button>
+                        <div class='@RowActionsClass(MenuKey("workspace", item))' @onclick:stopPropagation="true">
+                            <button title="More" @onclick='() => ToggleMore(MenuKey("workspace", item))'>···</button>
                             <div class="more-menu">
-                                <button disabled>Rename</button>
+                                <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Configure</button>
                                 <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Open in Explorer</button>
                                 @if (isActiveWorkspace)
                                 {
@@ -57,15 +76,6 @@
             <span class="muted-line">@WorkspaceStatus</span>
         </section>
     }
-
-    <section class="sidebar-search">
-        <span>⌕</span>
-        <input value="@searchText" @oninput="HandleSearchChanged" placeholder="Search workspaces, collections, requests, specs..." />
-        @if (!string.IsNullOrWhiteSpace(searchText))
-        {
-            <button title="Clear search" @onclick="ClearSearch">×</button>
-        }
-    </section>
 
     <section class="nav-block">
         <div class="block-title">
@@ -91,18 +101,20 @@
                         <div class="@CollectionClass(collection)">
                             <button class="tree-main" @onclick="() => ToggleCollection(collection)">
                                 <span class="tree-caret">@(IsCollectionExpanded(collection) ? "▾" : "▸")</span>
-                                <span class="collection-icon">▣</span>
                                 <span class="item-main">@collection.Name</span>
                                 <small>@CollectionBadge(collection)</small>
                             </button>
-                            <div class="row-actions">
+                            <div class='@RowActionsClass(MenuKey("collection", collection.Id))' @onclick:stopPropagation="true">
                                 <button title="New request" @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))">＋</button>
-                                <button title="More">···</button>
+                                <button title="More" @onclick='() => ToggleMore(MenuKey("collection", collection.Id))'>···</button>
                                 <div class="more-menu">
-                                    <button disabled>Rename</button>
-                                    <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))">Duplicate</button>
+                                    <button @onclick="() => OnOpenCollectionConfig.InvokeAsync(new CollectionEventArgs(collection))">Configure</button>
                                     <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))">Open in Explorer</button>
-                                    <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))">Delete</button>
+                                    @if (!IsLooseCollection(collection))
+                                    {
+                                        <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))">Duplicate</button>
+                                        <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))">Delete</button>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -120,11 +132,11 @@
                                             <span class="method tiny @request.Method.ToLowerInvariant()">@request.Method</span>
                                             <strong>@request.Name</strong>
                                         </button>
-                                        <div class="row-actions request-actions">
+                                        <div class='@RowActionsClass(MenuKey("request", request.Id), "request-actions")' @onclick:stopPropagation="true">
                                             <button title="Open" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">↗</button>
-                                            <button title="More">···</button>
+                                            <button title="More" @onclick='() => ToggleMore(MenuKey("request", request.Id))'>···</button>
                                             <div class="more-menu">
-                                                <button disabled>Rename</button>
+                                                <button @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">Rename</button>
                                                 <button @onclick="() => OnDuplicateRequest.InvokeAsync(new RequestEventArgs(collection, request))">Duplicate</button>
                                                 <button @onclick="() => OnOpenRequestDefault.InvokeAsync(new RequestEventArgs(collection, request))">Open default</button>
                                                 <button class="danger-menu" @onclick="() => OnDeleteRequestItem.InvokeAsync(new RequestEventArgs(collection, request))">Delete</button>
@@ -146,12 +158,16 @@
                 <span>@(ShowSpecsSection ? "▾" : "▸")</span>
                 <strong>Specifications</strong>
             </button>
-            <div class="title-actions">
-                <button title="Add specification" @onclick="OnPickTryFile">＋</button>
+            <div class='@TitleActionsClass(MenuKey("add", "specification"))' @onclick:stopPropagation="true">
+                <button title="Add specification" @onclick='() => ToggleMore(MenuKey("add", "specification"))'>＋</button>
+                <div class="more-menu">
+                    <button @onclick="OnPickTryFile">Local file</button>
+                    <button @onclick="OnNewRemoteSpecification">Remote endpoint</button>
+                </div>
                 <button title="Load current specification" @onclick="OnLoadTryDocument">↻</button>
             </div>
         </div>
-        @if (ShowSpecsSection && FilteredSpecifications.Count == 0 && FilteredSpecFiles.Count == 0)
+        @if (ShowSpecsSection && FilteredSpecifications.Count == 0)
         {
             <div class="empty-copy">Add a local or remote specification.</div>
         }
@@ -162,40 +178,21 @@
                 {
                     <div @key="specification" class="@SpecificationClass(specification)">
                         <button class="tree-main" @onclick="() => OnSelectSpecification.InvokeAsync(new SpecificationEventArgs(specification))">
-                            <span class="@SpecificationDotClass(specification)"></span>
                             <span class="item-main">@specification.Name</span>
                             <small>@SpecificationBadge(specification)</small>
                         </button>
-                        <div class="row-actions">
+                        <div class='@RowActionsClass(MenuKey("specification", specification.Id))' @onclick:stopPropagation="true">
                             @if (specification.SourceType == ReadableSpecificationSourceType.RemoteEndpoint)
                             {
                                 <button title="Refresh remote specification" @onclick="() => OnRefreshSpecification.InvokeAsync(new SpecificationEventArgs(specification))">↻</button>
                             }
-                            else
-                            {
-                                <button title="Open" @onclick="() => OnSelectSpecification.InvokeAsync(new SpecificationEventArgs(specification))">↗</button>
-                            }
-                            <button title="More">···</button>
+                            <button title="More" @onclick='() => ToggleMore(MenuKey("specification", specification.Id))'>···</button>
                             <div class="more-menu">
-                                <button disabled>Rename</button>
-                                <button disabled>Duplicate</button>
+                                <button @onclick="() => OnSelectSpecification.InvokeAsync(new SpecificationEventArgs(specification))">Rename</button>
+                                <button @onclick="() => OnDuplicateSpecification.InvokeAsync(new SpecificationEventArgs(specification))">Duplicate</button>
                                 <button @onclick="() => OnOpenSpecificationInExplorer.InvokeAsync(new SpecificationEventArgs(specification))">Open in Explorer</button>
-                                <button class="danger-menu" disabled>Delete</button>
+                                <button class="danger-menu" @onclick="() => OnDeleteSpecification.InvokeAsync(new SpecificationEventArgs(specification))">Delete</button>
                             </div>
-                        </div>
-                    </div>
-                }
-                @foreach (var spec in FilteredSpecFiles)
-                {
-                    <div @key="spec" class="@SpecClass(spec)">
-                        <button class="tree-main" @onclick="() => OnSelectSpec.InvokeAsync(new SpecSelectedEventArgs(spec))">
-                            <span class="item-dot imported"></span>
-                            <span class="item-main">@Path.GetFileName(spec)</span>
-                            <small>@SpecBadge(spec)</small>
-                        </button>
-                        <div class="row-actions">
-                            <button title="Import preview" @onclick="() => OnSelectSpec.InvokeAsync(new SpecSelectedEventArgs(spec))">↻</button>
-                            <button title="Raw file" @onclick="OnShowRaw">⌘</button>
                         </div>
                     </div>
                 }
@@ -204,17 +201,36 @@
     </section>
 
     <footer class="sidebar-env">
-        <button class="workspace-quick-switch" title="Switch workspace" @onclick="ToggleWorkspaceMenu">
+        <div class="workspace-quick-host" @onclick:stopPropagation="true">
+            <button class="workspace-quick-switch" title="Switch workspace" @onclick="ToggleQuickSwitch">
             <span>@(WorkspaceName ?? WorkspaceLabel(WorkspacePath))</span>
             <small>@WorkspaceTypeLabel</small>
-        </button>
+            </button>
+            @if (quickSwitchOpen)
+            {
+                <div class="workspace-quick-menu">
+                    @foreach (var item in WorkspaceOptions)
+                    {
+                        <button @key="item" class="@WorkspaceQuickClass(item)" @onclick="() => SelectWorkspaceFromQuickSwitch(item)">
+                            <span>@WorkspaceLabel(item)</span>
+                            @if (!IsWorkspaceUsable(item))
+                            {
+                                <small>Unavailable</small>
+                            }
+                        </button>
+                    }
+                </div>
+            }
+        </div>
         <button class="footer-button settings-button" title="Settings" @onclick="OnShowSettings">⚙</button>
         <button class="footer-button" title="Hide sidebar" @onclick="OnToggleExplorer">◁</button>
     </footer>
 </aside>
 
 @code {
-    private bool workspaceMenuOpen = true;
+    private bool workspaceMenuOpen;
+    private bool quickSwitchOpen;
+    private string? openMenuKey;
     private string searchText = string.Empty;
     private readonly HashSet<string> expandedCollectionIds = [];
 
@@ -243,6 +259,7 @@
     [Parameter] public EventCallback OnNewCollection { get; set; }
     [Parameter] public EventCallback OnPickWorkspace { get; set; }
     [Parameter] public EventCallback OnNewWorkspace { get; set; }
+    [Parameter] public EventCallback OnNewRemoteWorkspace { get; set; }
     [Parameter] public EventCallback<bool> WorkspaceAutoInitializeChanged { get; set; }
     [Parameter] public EventCallback OnLoadWorkspace { get; set; }
     [Parameter] public EventCallback OnSaveWorkspace { get; set; }
@@ -254,11 +271,13 @@
     [Parameter] public EventCallback OnGitPull { get; set; }
     [Parameter] public EventCallback OnGitPush { get; set; }
     [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnSelectWorkspace { get; set; }
+    [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnOpenWorkspaceConfig { get; set; }
     [Parameter] public EventCallback OnToggleWorkspaceSection { get; set; }
     [Parameter] public EventCallback OnToggleCollectionsSection { get; set; }
     [Parameter] public EventCallback OnToggleSpecsSection { get; set; }
     [Parameter] public EventCallback OnToggleRecentSection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnSelectCollection { get; set; }
+    [Parameter] public EventCallback<CollectionEventArgs> OnOpenCollectionConfig { get; set; }
     [Parameter] public EventCallback<RequestEventArgs> OnSelectRequest { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnNewRequestInCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnDuplicateCollection { get; set; }
@@ -269,16 +288,21 @@
     [Parameter] public EventCallback<RequestEventArgs> OnOpenRequestDefault { get; set; }
     [Parameter] public EventCallback OnShowRequest { get; set; }
     [Parameter] public EventCallback OnPickTryFile { get; set; }
+    [Parameter] public EventCallback OnNewRemoteSpecification { get; set; }
     [Parameter] public EventCallback OnLoadTryDocument { get; set; }
     [Parameter] public EventCallback<SpecSelectedEventArgs> OnSelectSpec { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnSelectSpecification { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnRefreshSpecification { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnOpenSpecificationInExplorer { get; set; }
+    [Parameter] public EventCallback<SpecificationEventArgs> OnDuplicateSpecification { get; set; }
+    [Parameter] public EventCallback<SpecificationEventArgs> OnDeleteSpecification { get; set; }
     [Parameter] public EventCallback OnShowRaw { get; set; }
     [Parameter] public EventCallback<SessionSelectedEventArgs> OnSelectSession { get; set; }
     [Parameter] public EventCallback OnToggleExplorer { get; set; }
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(searchText);
+
+    private bool HasOpenFlyout => quickSwitchOpen || openMenuKey is not null;
 
     private string Query => searchText.Trim();
 
@@ -299,11 +323,6 @@
             || Matches(specification.Path)
             || Matches(specification.Remote?.Endpoint)
             || Matches(specification.SourceType.ToString()))
-        .ToList();
-
-    private IReadOnlyList<string> FilteredSpecFiles => SpecFiles
-        .Where(path => !Specifications.Any(specification => string.Equals(specification.Path, path, StringComparison.OrdinalIgnoreCase))
-            && (Matches(path) || Matches(Path.GetFileName(path))))
         .ToList();
 
     private IReadOnlyList<ReadableRequest> FilteredRequests(ReadableCollection collection)
@@ -328,6 +347,32 @@
     private void ToggleWorkspaceMenu()
     {
         workspaceMenuOpen = !workspaceMenuOpen;
+        quickSwitchOpen = false;
+        openMenuKey = null;
+    }
+
+    private void ToggleQuickSwitch()
+    {
+        quickSwitchOpen = !quickSwitchOpen;
+        openMenuKey = null;
+    }
+
+    private async Task SelectWorkspaceFromQuickSwitch(string path)
+    {
+        quickSwitchOpen = false;
+        await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(path));
+    }
+
+    private void ToggleMore(string key)
+    {
+        quickSwitchOpen = false;
+        openMenuKey = string.Equals(openMenuKey, key, StringComparison.Ordinal) ? null : key;
+    }
+
+    private void CloseFlyouts()
+    {
+        quickSwitchOpen = false;
+        openMenuKey = null;
     }
 
     private void ClearSearch()
@@ -360,9 +405,52 @@
         await WorkspaceAutoInitializeChanged.InvokeAsync(args.Value is bool value && value);
     }
 
-    private string WorkspaceClass(string path) => string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase)
-        ? "workspace-option active"
-        : "workspace-option";
+    private string WorkspaceClass(string path)
+    {
+        var classes = "workspace-option";
+        if (string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            classes += " active";
+        }
+
+        if (!IsWorkspaceUsable(path))
+        {
+            classes += " unavailable";
+        }
+
+        return classes;
+    }
+
+    private string WorkspaceQuickClass(string path) => string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase)
+        ? "active"
+        : string.Empty;
+
+    private string RowActionsClass(string key, string? extra = null)
+    {
+        var value = string.Equals(openMenuKey, key, StringComparison.Ordinal)
+            ? "row-actions open"
+            : "row-actions";
+        return string.IsNullOrWhiteSpace(extra) ? value : $"{value} {extra}";
+    }
+
+    private string TitleActionsClass(string key)
+    {
+        return string.Equals(openMenuKey, key, StringComparison.Ordinal)
+            ? "title-actions open"
+            : "title-actions";
+    }
+
+    private static string MenuKey(string scope, string id) => $"{scope}:{id}";
+
+    private static bool IsLooseCollection(ReadableCollection collection)
+    {
+        return collection.Id == "__loose_requests__";
+    }
+
+    private static bool IsWorkspaceUsable(string path)
+    {
+        return !string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, "workspace.json"));
+    }
 
     private string CollectionClass(ReadableCollection collection)
     {
@@ -376,11 +464,6 @@
             : "request-row";
     }
 
-    private string SpecClass(string path)
-    {
-        return string.Equals(TryFilePath, path, StringComparison.OrdinalIgnoreCase) ? "tree-row spec-row active" : "tree-row spec-row";
-    }
-
     private string SpecificationClass(ReadableSpecification specification)
     {
         return string.Equals(TryFilePath, specification.Path, StringComparison.OrdinalIgnoreCase)
@@ -390,6 +473,23 @@
 
     private static string WorkspaceLabel(string path)
     {
+        var workspaceFile = Path.Combine(path, "workspace.json");
+        if (File.Exists(workspaceFile))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(workspaceFile));
+                if (document.RootElement.TryGetProperty("name", out var configuredName)
+                    && !string.IsNullOrWhiteSpace(configuredName.GetString()))
+                {
+                    return configuredName.GetString()!;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+            {
+            }
+        }
+
         var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         return string.IsNullOrWhiteSpace(name) ? path : name;
     }
@@ -404,22 +504,12 @@
         var format = specification.Format == ReadableSpecificationFormat.Unknown && !string.IsNullOrWhiteSpace(specification.Path)
             ? Path.GetExtension(specification.Path).TrimStart('.').ToUpperInvariant()
             : specification.Format.ToString();
-        return string.IsNullOrWhiteSpace(format) ? "SPEC" : format;
-    }
-
-    private static string SpecificationDotClass(ReadableSpecification specification)
-    {
-        return specification.SourceType switch
+        var source = specification.SourceType switch
         {
-            ReadableSpecificationSourceType.RemoteEndpoint => specification.Remote?.UpdateAvailable == true ? "item-dot remote changed" : "item-dot remote",
-            ReadableSpecificationSourceType.GitFile => "item-dot git",
-            _ => "item-dot spec"
+            ReadableSpecificationSourceType.RemoteEndpoint => "Remote",
+            ReadableSpecificationSourceType.GitFile => "Git",
+            _ => "Local"
         };
-    }
-
-    private static string SpecBadge(string path)
-    {
-        var extension = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
-        return string.IsNullOrWhiteSpace(extension) ? "API" : extension;
+        return string.IsNullOrWhiteSpace(format) ? source : $"{source} · {format}";
     }
 }

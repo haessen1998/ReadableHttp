@@ -17,19 +17,7 @@
 
     @if (ActiveRequestOrigin is null)
     {
-        <section class="blank-page">
-            <div class="blank-copy">
-                <span>Workspace</span>
-                <strong>Open something to begin</strong>
-                <p>Choose a workspace, create a collection, start a request, or load a specification.</p>
-            </div>
-            <div class="blank-actions">
-                <button @onclick="OnPickWorkspace">Open Workspace</button>
-                <button @onclick="OnNewCollection">Create Collection</button>
-                <button @onclick="OnNewScratchRequest">New Request</button>
-                <button @onclick="OnPickTryFile">Load Specification</button>
-            </div>
-        </section>
+        <section class="blank-page"></section>
     }
     else if (IsRequestEditor)
     {
@@ -117,14 +105,17 @@
             </header>
             <section class="config-section">
                 <h2>Scope</h2>
-                <table class="config-table">
-                    <tbody>
-                        <tr><td>Level</td><td>Workspace</td><td>Lowest shared defaults</td></tr>
-                        <tr><td>Path</td><td>@WorkspacePath</td><td>Local workspace root</td></tr>
-                        <tr><td>Collections</td><td>@CollectionCount</td><td>Collection overrides apply after workspace</td></tr>
-                        <tr><td>Specifications</td><td>@SpecificationCount</td><td>Documents can open request tabs</td></tr>
-                    </tbody>
-                </table>
+                <label><span>Name</span><input value="@WorkspaceName" @onchange="HandleWorkspaceNameChanged" /></label>
+                <label><span>Type</span><input value="@WorkspaceTypeLabel" readonly /></label>
+                <label><span>Path</span><input value="@WorkspacePath" readonly /></label>
+                @if (WorkspaceTypeLabel == "Git")
+                {
+                    <label><span>Remote URL</span><input value="@WorkspaceRemoteUrl" @onchange="HandleWorkspaceRemoteUrlChanged" /></label>
+                }
+                <div class="config-grid">
+                    <span>Collections <strong>@CollectionCount</strong></span>
+                    <span>Specifications <strong>@SpecificationCount</strong></span>
+                </div>
             </section>
             <section class="config-section">
                 <h2>Environment</h2>
@@ -136,6 +127,9 @@
                     </tbody>
                 </table>
             </section>
+            <footer class="settings-footer">
+                <button class="save-button" @onclick="OnSaveWorkspaceConfig">Save Workspace</button>
+            </footer>
         </section>
     }
     else if (ActiveRequestOrigin == RequestTabOrigin.CollectionConfig)
@@ -147,13 +141,12 @@
             </header>
             <section class="config-section">
                 <h2>Scope</h2>
-                <table class="config-table">
-                    <tbody>
-                        <tr><td>Level</td><td>Collection</td><td>Overrides workspace defaults</td></tr>
-                        <tr><td>Source</td><td>@CollectionSource</td><td>Local and remote sources can diverge later</td></tr>
-                        <tr><td>Requests</td><td>@CollectionRequestCount</td><td>Request tabs have highest precedence</td></tr>
-                    </tbody>
-                </table>
+                <label><span>Name</span><input value="@CollectionName" @onchange="HandleCollectionNameChanged" /></label>
+                <label><span>Request directory</span><input value="@CollectionRequestDirectory" @onchange="HandleCollectionRequestDirectoryChanged" /></label>
+                <div class="config-grid">
+                    <span>Source <strong>@CollectionSource</strong></span>
+                    <span>Requests <strong>@CollectionRequestCount</strong></span>
+                </div>
             </section>
             <section class="config-section">
                 <h2>Environment</h2>
@@ -165,6 +158,38 @@
                     </tbody>
                 </table>
             </section>
+            <footer class="settings-footer">
+                <button class="save-button" @onclick="OnSaveCollectionConfig">Save Collection</button>
+            </footer>
+        </section>
+    }
+    else if (ActiveRequestOrigin == RequestTabOrigin.SpecificationConfig)
+    {
+        <section class="config-page">
+            <header>
+                <span>Specification</span>
+                <strong>@SpecificationName</strong>
+            </header>
+            <section class="config-section">
+                <h2>Source</h2>
+                <label><span>Name</span><input value="@SpecificationName" @onchange="HandleSpecificationNameChanged" /></label>
+                <label><span>Type</span><input value="@SpecificationSourceLabel" readonly /></label>
+                @if (SpecificationSourceLabel == "RemoteEndpoint")
+                {
+                    <label><span>Endpoint</span><input value="@SpecificationEndpoint" @onchange="HandleSpecificationEndpointChanged" /></label>
+                }
+                else
+                {
+                    <label><span>Path</span><input value="@SpecificationPath" readonly /></label>
+                }
+            </section>
+            <footer class="settings-footer">
+                <button class="save-button" @onclick="OnSaveSpecificationConfig">Save Specification</button>
+                @if (SpecificationSourceLabel == "RemoteEndpoint")
+                {
+                    <button class="save-as-button" @onclick="OnRefreshSpecificationConfig">Refresh</button>
+                }
+            </footer>
         </section>
     }
     else if (ActiveRequestOrigin == RequestTabOrigin.SpecificationDocument && ViewMode == "raw")
@@ -197,13 +222,16 @@
             <section class="request-config">
                 @if (RequestTab == "Params")
                 {
-                    <table class="param-table">
-                        <tbody>
-                            <tr><td><span class="enabled-dot"></span></td><td>workspace</td><td>@WorkspaceName</td></tr>
-                            <tr><td><span class="enabled-dot"></span></td><td>source</td><td>@ActiveSource</td></tr>
-                            <tr><td><span class="disabled-dot"></span></td><td>operations</td><td>@OperationCount</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="request-form">
+                        <label><span>Name</span><input value="@RequestName" @onchange="HandleRequestNameChanged" /></label>
+                        <table class="param-table">
+                            <tbody>
+                                <tr><td><span class="enabled-dot"></span></td><td>workspace</td><td>@WorkspaceName</td></tr>
+                                <tr><td><span class="enabled-dot"></span></td><td>source</td><td>@ActiveSource</td></tr>
+                                <tr><td><span class="disabled-dot"></span></td><td>operations</td><td>@OperationCount</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 }
                 else if (RequestTab == "Headers")
                 {
@@ -310,13 +338,28 @@
     [Parameter] public string RawContent { get; set; } = string.Empty;
     [Parameter] public RenderFragment? PreviewContent { get; set; }
     [Parameter] public string RequestTab { get; set; } = "Params";
+    [Parameter] public string RequestName { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> RequestNameChanged { get; set; }
     [Parameter] public string WorkspaceName { get; set; } = "scratch";
+    [Parameter] public EventCallback<string> WorkspaceNameChanged { get; set; }
+    [Parameter] public string WorkspaceTypeLabel { get; set; } = "Local";
+    [Parameter] public string WorkspaceRemoteUrl { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> WorkspaceRemoteUrlChanged { get; set; }
     [Parameter] public string WorkspacePath { get; set; } = string.Empty;
     [Parameter] public int CollectionCount { get; set; }
     [Parameter] public int SpecificationCount { get; set; }
     [Parameter] public string CollectionName { get; set; } = "Collection";
+    [Parameter] public EventCallback<string> CollectionNameChanged { get; set; }
     [Parameter] public string CollectionSource { get; set; } = "Local";
+    [Parameter] public string CollectionRequestDirectory { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> CollectionRequestDirectoryChanged { get; set; }
     [Parameter] public int CollectionRequestCount { get; set; }
+    [Parameter] public string SpecificationName { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> SpecificationNameChanged { get; set; }
+    [Parameter] public string SpecificationSourceLabel { get; set; } = string.Empty;
+    [Parameter] public string SpecificationEndpoint { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> SpecificationEndpointChanged { get; set; }
+    [Parameter] public string SpecificationPath { get; set; } = string.Empty;
     [Parameter] public string ActiveSource { get; set; } = "Request";
     [Parameter] public int OperationCount { get; set; }
     [Parameter] public bool UseSystemProxy { get; set; }
@@ -336,6 +379,10 @@
     [Parameter] public EventCallback OnSend { get; set; }
     [Parameter] public EventCallback OnSaveRequest { get; set; }
     [Parameter] public EventCallback OnSaveRequestAsNew { get; set; }
+    [Parameter] public EventCallback OnSaveWorkspaceConfig { get; set; }
+    [Parameter] public EventCallback OnSaveCollectionConfig { get; set; }
+    [Parameter] public EventCallback OnSaveSpecificationConfig { get; set; }
+    [Parameter] public EventCallback OnRefreshSpecificationConfig { get; set; }
     [Parameter] public EventCallback OnNewScratchRequest { get; set; }
     [Parameter] public EventCallback OnPickWorkspace { get; set; }
     [Parameter] public EventCallback OnNewCollection { get; set; }
@@ -371,6 +418,20 @@
     {
         await BodyTextChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
     }
+
+    private async Task HandleRequestNameChanged(ChangeEventArgs args) => await RequestNameChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleWorkspaceNameChanged(ChangeEventArgs args) => await WorkspaceNameChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleWorkspaceRemoteUrlChanged(ChangeEventArgs args) => await WorkspaceRemoteUrlChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleCollectionNameChanged(ChangeEventArgs args) => await CollectionNameChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleCollectionRequestDirectoryChanged(ChangeEventArgs args) => await CollectionRequestDirectoryChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleSpecificationNameChanged(ChangeEventArgs args) => await SpecificationNameChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+
+    private async Task HandleSpecificationEndpointChanged(ChangeEventArgs args) => await SpecificationEndpointChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
 
     private async Task HandleThemeModeChanged(ChangeEventArgs args) => await ThemeModeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.ThemeSystem);
 

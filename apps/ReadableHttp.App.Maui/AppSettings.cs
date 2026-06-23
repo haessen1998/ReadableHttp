@@ -2,9 +2,7 @@ namespace ReadableHttp.App.Maui;
 
 public sealed class AppSettings
 {
-    public string WorkspacePath { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-        "ReadableHttp Workspace");
+    public string WorkspacePath { get; set; } = string.Empty;
 
     public string TryFilePath { get; set; } = string.Empty;
 

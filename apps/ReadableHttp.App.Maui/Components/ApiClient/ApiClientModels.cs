@@ -24,6 +24,7 @@ public enum RequestTabOrigin
     CollectionConfig,
     Collection,
     Specification,
+    SpecificationConfig,
     SpecificationDocument,
     Settings
 }

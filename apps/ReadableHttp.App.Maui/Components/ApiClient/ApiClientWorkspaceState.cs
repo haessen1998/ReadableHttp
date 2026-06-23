@@ -9,6 +9,7 @@ namespace ReadableHttp.App.Maui.Components.ApiClient;
 
 public sealed class ApiClientWorkspaceState
 {
+    private const string LooseRequestsCollectionId = "__loose_requests__";
     public const string ThemeSystem = "system";
     public const string ThemeLight = "light";
     public const string ThemeDark = "dark";
@@ -29,9 +30,9 @@ public sealed class ApiClientWorkspaceState
 
     public event Action? Changed;
 
-    public string WorkspacePath { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ReadableHttp Workspace");
+    public string WorkspacePath { get; set; } = string.Empty;
     public string WorkspaceStatus { get; private set; } = "No workspace loaded";
-    public string TryFilePath { get; private set; } = "samples/openapi/httpbin.openapi.json";
+    public string TryFilePath { get; private set; } = string.Empty;
     public string ActiveSource { get; private set; } = "Request";
     public string DocumentTitle { get; private set; } = "Scratch Request";
     public string RawContent { get; private set; } = string.Empty;
@@ -66,8 +67,11 @@ public sealed class ApiClientWorkspaceState
     public ReadableWorkspace? Workspace { get; private set; }
     public ReadableCollection? SelectedCollection { get; private set; }
     public ReadableRequest? SelectedRequest { get; private set; }
+    public ReadableSpecification? SelectedSpecification { get; private set; }
     public List<ReadableCollection> Collections { get; private set; } = [];
     public IReadOnlyList<ReadableSpecification> Specifications => Workspace?.Specifications ?? [];
+
+    public int VisibleSpecificationCount => Specifications.Count;
     public List<ReadableTryOperation> Operations { get; private set; } = [];
     public List<string> SpecFiles { get; private set; } = [];
     public List<string> RecentSessions { get; private set; } = ["Scratch Request"];
@@ -81,7 +85,23 @@ public sealed class ApiClientWorkspaceState
 
     public bool IsGitWorkspace => Workspace?.Type == ReadableWorkspaceType.Git;
 
-    public string WorkspaceName => Workspace?.Name ?? "scratch";
+    public string WorkspaceName => Workspace?.Name ?? "No workspace";
+
+    public string CollectionRequestDirectory => SelectedCollection?.RequestDirectory ?? string.Empty;
+
+    public string RequestName => ActiveRequestTab?.Title ?? string.Empty;
+
+    public string WorkspaceRemoteUrl => Workspace?.Git?.RemoteUrl ?? string.Empty;
+
+    public string WorkspaceTypeLabel => Workspace?.Type.ToString() ?? ReadableWorkspaceType.Local.ToString();
+
+    public string SpecificationName => SelectedSpecification?.Name ?? string.Empty;
+
+    public string SpecificationEndpoint => SelectedSpecification?.Remote?.Endpoint ?? string.Empty;
+
+    public string SpecificationPath => SelectedSpecification?.Path ?? string.Empty;
+
+    public string SpecificationSourceLabel => SelectedSpecification?.SourceType.ToString() ?? string.Empty;
 
     public RequestWorkspaceTab? ActiveRequestTab => RequestTabs.FirstOrDefault(tab => tab.Id == ActiveRequestTabId)
         ?? RequestTabs.FirstOrDefault();
@@ -129,7 +149,7 @@ public sealed class ApiClientWorkspaceState
 
     public string SelectedResponseText => GetSelectedResponseText();
 
-    public void Initialize()
+    public async Task InitializeAsync()
     {
         if (_initialized)
         {
@@ -156,9 +176,41 @@ public sealed class ApiClientWorkspaceState
         {
             AddWorkspaceOption(workspace);
         }
-        AddWorkspaceOption(WorkspacePath);
-        AddSpecFile(TryFilePath);
+        if (!string.IsNullOrWhiteSpace(settings.WorkspacePath))
+        {
+            AddWorkspaceOption(settings.WorkspacePath);
+        }
+
+        var unavailableWorkspaces = WorkspaceOptions
+            .Where(path => !IsWorkspaceUsable(path))
+            .ToList();
+
+        if (!string.IsNullOrWhiteSpace(TryFilePath))
+        {
+            AddSpecFile(TryFilePath);
+        }
         _initialized = true;
+
+        if (!string.IsNullOrWhiteSpace(settings.WorkspacePath) && IsWorkspaceUsable(settings.WorkspacePath))
+        {
+            await LoadWorkspaceAsync();
+            if (unavailableWorkspaces.Count > 0)
+            {
+                WorkspaceStatus = $"{WorkspaceStatus} · {unavailableWorkspaces.Count} workspace unavailable";
+                AddActivity("Workspace", $"{unavailableWorkspaces.Count} 个历史工作区不可用，可恢复路径或在 more 中删除");
+                NotifyChanged();
+            }
+            return;
+        }
+
+        if (unavailableWorkspaces.Count > 0)
+        {
+            WorkspaceStatus = string.IsNullOrWhiteSpace(settings.WorkspacePath)
+                ? $"{unavailableWorkspaces.Count} workspace unavailable"
+                : $"Last workspace unavailable: {WorkspaceDisplayName(settings.WorkspacePath)}";
+            AddActivity("Workspace", "历史工作区中存在不可用路径，可恢复路径或在 more 中删除");
+        }
+
         NotifyChanged();
     }
 
@@ -202,6 +254,99 @@ public sealed class ApiClientWorkspaceState
                     Content = value
                 };
         }
+        NotifyChanged();
+    }
+
+    public void SetRequestName(string value)
+    {
+        var tab = EnsureActiveRequestTab();
+        tab.Title = string.IsNullOrWhiteSpace(value) ? "Untitled Request" : value.Trim();
+        tab.IsDirty = true;
+        if (SelectedRequest is not null && tab.Origin == RequestTabOrigin.Collection)
+        {
+            SelectedRequest.Name = tab.Title;
+        }
+        NotifyChanged();
+    }
+
+    public void SetWorkspaceName(string value)
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+
+        Workspace.Name = string.IsNullOrWhiteSpace(value) ? "ReadableHttp Workspace" : value.Trim();
+        if (ActiveRequestTab?.Origin == RequestTabOrigin.Workspace)
+        {
+            ActiveRequestTab.Title = Workspace.Name;
+        }
+        NotifyChanged();
+    }
+
+    public void SetCollectionName(string value)
+    {
+        if (SelectedCollection is null)
+        {
+            return;
+        }
+
+        SelectedCollection.Name = string.IsNullOrWhiteSpace(value) ? "Collection" : value.Trim();
+        if (ActiveRequestTab?.Origin == RequestTabOrigin.CollectionConfig)
+        {
+            ActiveRequestTab.Title = SelectedCollection.Name;
+        }
+        NotifyChanged();
+    }
+
+    public void SetCollectionRequestDirectory(string value)
+    {
+        if (SelectedCollection is null)
+        {
+            return;
+        }
+
+        SelectedCollection.RequestDirectory = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        NotifyChanged();
+    }
+
+    public void SetWorkspaceRemoteUrl(string value)
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+
+        Workspace.Git ??= new ReadableGitOptions();
+        Workspace.Git.RemoteUrl = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        NotifyChanged();
+    }
+
+    public void SetSpecificationName(string value)
+    {
+        if (SelectedSpecification is null)
+        {
+            return;
+        }
+
+        SelectedSpecification.Name = string.IsNullOrWhiteSpace(value) ? "Specification" : value.Trim();
+        if (ActiveRequestTab?.Origin == RequestTabOrigin.SpecificationConfig)
+        {
+            ActiveRequestTab.Title = SelectedSpecification.Name;
+        }
+        NotifyChanged();
+    }
+
+    public void SetSpecificationEndpoint(string value)
+    {
+        if (SelectedSpecification is null)
+        {
+            return;
+        }
+
+        SelectedSpecification.SourceType = ReadableSpecificationSourceType.RemoteEndpoint;
+        SelectedSpecification.Remote ??= new ReadableRemoteSpecificationOptions();
+        SelectedSpecification.Remote.Endpoint = value.Trim();
         NotifyChanged();
     }
 
@@ -266,6 +411,43 @@ public sealed class ApiClientWorkspaceState
         }
     }
 
+    public async Task NewRemoteWorkspaceAsync()
+    {
+        try
+        {
+            var path = await _filePicker.PickFolderAsync("New remote workspace folder");
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            WorkspacePath = path;
+            Directory.CreateDirectory(WorkspacePath);
+            Workspace = new ReadableWorkspace
+            {
+                Name = Path.GetFileName(WorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                Type = ReadableWorkspaceType.Git,
+                Git = new ReadableGitOptions()
+            };
+            Collections = Workspace.Collections;
+            SelectedCollection = null;
+            SelectedRequest = null;
+            await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+            AddWorkspaceOption(WorkspacePath);
+            OpenWorkspaceConfigTab();
+            WorkspaceStatus = $"Created remote workspace: {Workspace.Name}";
+            AddActivity("Workspace", "已创建远程工作区配置，请填写 Remote URL");
+            SaveSettings();
+            NotifyChanged();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            WorkspaceStatus = $"Create failed: {exception.Message}";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+        }
+    }
+
     public async Task LoadWorkspaceAsync()
     {
         if (!ValidateWorkspacePath(WorkspacePath, out var message))
@@ -280,10 +462,10 @@ public sealed class ApiClientWorkspaceState
         {
             AddWorkspaceOption(WorkspacePath);
             Workspace = await _workspaceStore.LoadWorkspaceAsync(WorkspacePath);
-            Collections = Workspace.Collections;
+            Collections = Workspace.Collections.ToList();
+            await AddLooseRequestsCollectionAsync();
             SelectedCollection = null;
             SelectedRequest = null;
-            OpenWorkspaceConfigTab();
             WorkspaceStatus = $"Loaded: {Workspace.Name}";
             AddActivity("Workspace", WorkspaceStatus);
             SaveSettings();
@@ -299,17 +481,27 @@ public sealed class ApiClientWorkspaceState
 
     public async Task LoadTryDocumentAsync()
     {
-        var document = await new ReadableTryDocumentLoader().LoadAsync(TryFilePath);
-        ActiveSource = document.SourceType.ToString();
-        DocumentTitle = document.Title ?? document.FileName ?? "Try Document";
-        RawContent = document.RawContent;
-        Operations = document.Operations;
-        ViewMode = "preview";
-        AddSpecFile(TryFilePath);
-        OpenSpecificationDocumentTab(DocumentTitle, TryFilePath);
-        AddActivity("Import", $"已转换 {Operations.Count} 个 operation");
-        SaveSettings();
-        NotifyChanged();
+        try
+        {
+            var document = await new ReadableTryDocumentLoader().LoadAsync(TryFilePath);
+            ActiveSource = document.SourceType.ToString();
+            DocumentTitle = document.Title ?? document.FileName ?? "Try Document";
+            RawContent = document.RawContent;
+            Operations = document.Operations;
+            ViewMode = "preview";
+            AddSpecFile(TryFilePath);
+            OpenSpecificationDocumentTab(DocumentTitle, TryFilePath);
+            AddActivity("Import", $"已转换 {Operations.Count} 个 operation");
+            SaveSettings();
+            NotifyChanged();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException)
+        {
+            Operations = [];
+            RawContent = string.Empty;
+            AddActivity("Spec", $"加载失败：{exception.Message}");
+            NotifyChanged();
+        }
     }
 
     public async Task PickWorkspaceAsync()
@@ -344,6 +536,32 @@ public sealed class ApiClientWorkspaceState
             }
             NotifyChanged();
         }
+    }
+
+    public async Task NewRemoteSpecificationAsync()
+    {
+        if (Workspace is null)
+        {
+            WorkspaceStatus = "请先新建或加载 workspace";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+            return;
+        }
+
+        var specification = new ReadableSpecification
+        {
+            Name = NextSpecificationName("Remote Specification"),
+            SourceType = ReadableSpecificationSourceType.RemoteEndpoint,
+            Format = ReadableSpecificationFormat.OpenApi,
+            Remote = new ReadableRemoteSpecificationOptions(),
+            Path = $"specs/remote-{Guid.NewGuid():N}.json"
+        };
+        Workspace.Specifications.Add(specification);
+        SelectedSpecification = specification;
+        await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+        OpenSpecificationConfigTab(specification);
+        AddActivity("Spec", "已创建远程 specification，请填写 Endpoint");
+        NotifyChanged();
     }
 
     public void ToggleExplorer()
@@ -404,11 +622,23 @@ public sealed class ApiClientWorkspaceState
         DocumentTitle = collection.Name;
         ActiveSource = collection.SourceType.ToString();
         AddSession(collection.Name);
-        OpenCollectionConfigTab(collection);
         NotifyChanged();
     }
 
     public async Task SelectCollectionAsync(CollectionEventArgs args) => await SelectCollectionAsync(args.Collection);
+
+    public async Task OpenCollectionConfigAsync(ReadableCollection collection)
+    {
+        SelectedCollection = collection;
+        await LoadCollectionRequestsAsync(collection);
+        SelectedRequest = null;
+        DocumentTitle = collection.Name;
+        ActiveSource = collection.SourceType.ToString();
+        OpenCollectionConfigTab(collection);
+        NotifyChanged();
+    }
+
+    public async Task OpenCollectionConfigAsync(CollectionEventArgs args) => await OpenCollectionConfigAsync(args.Collection);
 
     public async Task SelectRequestAsync(ReadableCollection collection, ReadableRequest request)
     {
@@ -606,8 +836,24 @@ public sealed class ApiClientWorkspaceState
 
     public async Task SelectSpecificationAsync(ReadableSpecification specification)
     {
+        SelectedSpecification = specification;
+        if (specification.SourceType == ReadableSpecificationSourceType.RemoteEndpoint)
+        {
+            if (string.IsNullOrWhiteSpace(specification.Remote?.Endpoint))
+            {
+                OpenSpecificationConfigTab(specification);
+                AddActivity("Spec", $"{specification.Name} 需要填写 Endpoint");
+                NotifyChanged();
+                return;
+            }
+
+            await RefreshSpecificationAsync(specification);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(specification.Path))
         {
+            OpenSpecificationConfigTab(specification);
             AddActivity("Spec", $"{specification.Name} has no local document path");
             NotifyChanged();
             return;
@@ -635,11 +881,13 @@ public sealed class ApiClientWorkspaceState
         try
         {
             var document = await new ReadableSpecificationRefresher().RefreshAsync(WorkspacePath, specification);
+            SelectedSpecification = specification;
             Operations = document.Operations;
             RawContent = document.RawContent;
             DocumentTitle = document.Title ?? specification.Name;
             ActiveSource = specification.SourceType.ToString();
             ViewMode = "preview";
+            TryFilePath = ResolveWorkspacePath(specification.NormalizedPath ?? specification.Path ?? string.Empty);
             OpenSpecificationDocumentTab(DocumentTitle, TryFilePath);
             await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
             AddActivity("Spec", specification.Remote?.UpdateAvailable == true
@@ -647,14 +895,77 @@ public sealed class ApiClientWorkspaceState
                 : $"已刷新 {specification.Name}");
             NotifyChanged();
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or HttpRequestException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or HttpRequestException or JsonException)
         {
+            OpenSpecificationConfigTab(specification);
             AddActivity("Spec", $"刷新失败：{exception.Message}");
             NotifyChanged();
         }
     }
 
     public async Task RefreshSpecificationAsync(SpecificationEventArgs args) => await RefreshSpecificationAsync(args.Specification);
+
+    public async Task RefreshSelectedSpecificationAsync()
+    {
+        if (SelectedSpecification is null)
+        {
+            AddActivity("Spec", "没有选中的 specification");
+            NotifyChanged();
+            return;
+        }
+
+        await RefreshSpecificationAsync(SelectedSpecification);
+    }
+
+    public async Task DuplicateSpecificationAsync(ReadableSpecification specification)
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+
+        var json = JsonSerializer.Serialize(specification, ReadableHttpJsonStorage.JsonOptions);
+        var clone = JsonSerializer.Deserialize<ReadableSpecification>(json, ReadableHttpJsonStorage.JsonOptions) ?? new ReadableSpecification();
+        clone.Id = Guid.NewGuid().ToString("N");
+        clone.Name = NextSpecificationName($"{specification.Name} Copy");
+        Workspace.Specifications.Add(clone);
+        await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+        AddActivity("Spec", $"已复制 {specification.Name}");
+        NotifyChanged();
+    }
+
+    public async Task DuplicateSpecificationAsync(SpecificationEventArgs args) => await DuplicateSpecificationAsync(args.Specification);
+
+    public async Task DeleteSpecificationAsync(ReadableSpecification specification)
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+
+        Workspace.Specifications.RemoveAll(item => string.Equals(item.Id, specification.Id, StringComparison.Ordinal));
+        await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+        RequestTabs.RemoveAll(tab =>
+            tab.Origin == RequestTabOrigin.SpecificationDocument
+            && !string.IsNullOrWhiteSpace(specification.Path)
+            && string.Equals(tab.SourceKey, ResolveWorkspacePath(specification.Path), StringComparison.OrdinalIgnoreCase));
+        AddActivity("Spec", $"已删除 {specification.Name}");
+        NotifyChanged();
+    }
+
+    public async Task DeleteSpecificationAsync(SpecificationEventArgs args) => await DeleteSpecificationAsync(args.Specification);
+
+    public async Task SaveSpecificationAsync()
+    {
+        if (Workspace is null || SelectedSpecification is null)
+        {
+            return;
+        }
+
+        await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+        AddActivity("Spec", $"已保存 {SelectedSpecification.Name}");
+        NotifyChanged();
+    }
 
     public async Task SelectWorkspaceAsync(string path)
     {
@@ -672,6 +983,27 @@ public sealed class ApiClientWorkspaceState
     }
 
     public async Task SelectWorkspaceAsync(WorkspaceSelectedEventArgs args) => await SelectWorkspaceAsync(args.Path);
+
+    public async Task OpenWorkspaceConfigAsync(string path)
+    {
+        if (!string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            await SelectWorkspaceAsync(path);
+        }
+
+        if (Workspace is null)
+        {
+            WorkspaceStatus = "没有可配置的 workspace";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+            return;
+        }
+
+        OpenWorkspaceConfigTab();
+        NotifyChanged();
+    }
+
+    public async Task OpenWorkspaceConfigAsync(WorkspaceSelectedEventArgs args) => await OpenWorkspaceConfigAsync(args.Path);
 
     public void OpenWorkspaceInExplorer(string path)
     {
@@ -699,7 +1031,7 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        Workspace.Collections = Collections;
+        Workspace.Collections = Collections.Where(collection => !IsLooseRequestsCollection(collection)).ToList();
         await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
         foreach (var collection in Collections)
         {
@@ -797,7 +1129,7 @@ public sealed class ApiClientWorkspaceState
 
     public async Task DeleteCollectionAsync(ReadableCollection collection)
     {
-        if (Workspace is null)
+        if (Workspace is null || IsLooseRequestsCollection(collection))
         {
             return;
         }
@@ -881,7 +1213,7 @@ public sealed class ApiClientWorkspaceState
 
     public void OpenSpecificationInExplorer(SpecificationEventArgs args) => OpenSpecificationInExplorer(args.Specification);
 
-    public void SelectRequestTab(string tabId)
+    public async Task SelectRequestTab(string tabId)
     {
         var tab = RequestTabs.FirstOrDefault(item => item.Id == tabId);
         if (tab is null)
@@ -890,6 +1222,15 @@ public sealed class ApiClientWorkspaceState
         }
 
         ActivateTab(tab);
+        if (tab.Origin == RequestTabOrigin.Workspace
+            && !string.IsNullOrWhiteSpace(tab.SourceKey)
+            && !string.Equals(WorkspacePath, tab.SourceKey, StringComparison.OrdinalIgnoreCase))
+        {
+            WorkspacePath = tab.SourceKey;
+            await LoadWorkspaceAsync();
+            return;
+        }
+
         SyncSelectionFromTab(tab);
         NotifyChanged();
     }
@@ -931,7 +1272,9 @@ public sealed class ApiClientWorkspaceState
         }
 
         var collection = Collections.FirstOrDefault(item => string.Equals(item.Id, tab.CollectionId, StringComparison.OrdinalIgnoreCase));
-        var request = collection?.Requests.FirstOrDefault(item => string.Equals(item.Id, tab.RequestId, StringComparison.OrdinalIgnoreCase));
+        var request = collection?.Requests.FirstOrDefault(item =>
+            string.Equals(GetRequestSourceKey(collection, item), tab.SourceKey, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(item.Id, tab.RequestId, StringComparison.OrdinalIgnoreCase));
         if (collection is null || request is null)
         {
             await SaveActiveRequestAsNewAsync();
@@ -940,6 +1283,8 @@ public sealed class ApiClientWorkspaceState
 
         ApplyTabToRequest(tab, request);
         await _workspaceStore.SaveCollectionRequestsAsync(WorkspacePath, collection, collection.Requests, replaceExisting: true);
+        tab.RequestId = request.Id;
+        tab.SourceKey = GetRequestSourceKey(collection, request);
         tab.IsDirty = false;
         SelectedCollection = collection;
         SelectedRequest = request;
@@ -984,6 +1329,7 @@ public sealed class ApiClientWorkspaceState
         tab.Origin = RequestTabOrigin.Collection;
         tab.CollectionId = collection.Id;
         tab.RequestId = request.Id;
+        tab.SourceKey = GetRequestSourceKey(collection, request);
         tab.Title = request.Name;
         tab.ActiveSource = "Collection";
         tab.IsDirty = false;
@@ -1073,8 +1419,29 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        var requests = await _workspaceStore.LoadCollectionRequestsAsync(WorkspacePath, collection);
+        var requests = IsLooseRequestsCollection(collection)
+            ? await _workspaceStore.LoadLooseRequestsAsync(WorkspacePath)
+            : await _workspaceStore.LoadCollectionRequestsAsync(WorkspacePath, collection);
         collection.Requests = requests.ToList();
+    }
+
+    private async Task AddLooseRequestsCollectionAsync()
+    {
+        var looseRequests = await _workspaceStore.LoadLooseRequestsAsync(WorkspacePath);
+        if (looseRequests.Count == 0)
+        {
+            return;
+        }
+
+        Collections.RemoveAll(IsLooseRequestsCollection);
+        Collections.Insert(0, new ReadableCollection
+        {
+            Id = LooseRequestsCollectionId,
+            Name = "Loose Requests",
+            SourceType = ReadableCollectionSourceType.Local,
+            RequestDirectory = "requests",
+            Requests = looseRequests.ToList()
+        });
     }
 
     private RequestWorkspaceTab EnsureActiveRequestTab()
@@ -1108,6 +1475,7 @@ public sealed class ApiClientWorkspaceState
             && string.Equals(tab.SourceKey, key, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
+            existing.Title = WorkspaceName;
             ActivateTab(existing);
             return existing;
         }
@@ -1153,14 +1521,18 @@ public sealed class ApiClientWorkspaceState
 
     private RequestWorkspaceTab OpenCollectionRequestTab(ReadableCollection collection, ReadableRequest request)
     {
+        var sourceKey = GetRequestSourceKey(collection, request);
         var existing = RequestTabs.FirstOrDefault(tab =>
             tab.Origin == RequestTabOrigin.Collection
             && string.Equals(tab.CollectionId, collection.Id, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(tab.RequestId, request.Id, StringComparison.OrdinalIgnoreCase));
+            && (string.Equals(tab.SourceKey, sourceKey, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tab.RequestId, request.Id, StringComparison.OrdinalIgnoreCase)));
         if (existing is not null)
         {
             SelectedCollection = collection;
             SelectedRequest = request;
+            existing.RequestId = request.Id;
+            existing.SourceKey = sourceKey;
             ActivateTab(existing);
             return existing;
         }
@@ -1170,6 +1542,7 @@ public sealed class ApiClientWorkspaceState
         var tab = CreateTabFromRequest(request, RequestTabOrigin.Collection, "Collection");
         tab.CollectionId = collection.Id;
         tab.RequestId = request.Id;
+        tab.SourceKey = sourceKey;
         RequestTabs.Add(tab);
         ActivateTab(tab);
         AddSession(request.Name);
@@ -1214,6 +1587,32 @@ public sealed class ApiClientWorkspaceState
             Title = title,
             Origin = RequestTabOrigin.SpecificationDocument,
             SourceKey = key,
+            ActiveSource = "Specification"
+        };
+        RequestTabs.Add(tab);
+        ActivateTab(tab);
+        return tab;
+    }
+
+    private RequestWorkspaceTab OpenSpecificationConfigTab(ReadableSpecification specification)
+    {
+        var existing = RequestTabs.FirstOrDefault(tab =>
+            tab.Origin == RequestTabOrigin.SpecificationConfig
+            && string.Equals(tab.SourceKey, specification.Id, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            SelectedSpecification = specification;
+            existing.Title = specification.Name;
+            ActivateTab(existing);
+            return existing;
+        }
+
+        SelectedSpecification = specification;
+        var tab = new RequestWorkspaceTab
+        {
+            Title = specification.Name,
+            Origin = RequestTabOrigin.SpecificationConfig,
+            SourceKey = specification.Id,
             ActiveSource = "Specification"
         };
         RequestTabs.Add(tab);
@@ -1280,6 +1679,13 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
+        if (tab.Origin == RequestTabOrigin.SpecificationConfig)
+        {
+            SelectedSpecification = Specifications.FirstOrDefault(specification => string.Equals(specification.Id, tab.SourceKey, StringComparison.Ordinal));
+            SelectedRequest = null;
+            return;
+        }
+
         if (tab.Origin != RequestTabOrigin.Collection)
         {
             SelectedRequest = null;
@@ -1287,7 +1693,9 @@ public sealed class ApiClientWorkspaceState
         }
 
         SelectedCollection = Collections.FirstOrDefault(collection => string.Equals(collection.Id, tab.CollectionId, StringComparison.OrdinalIgnoreCase));
-        SelectedRequest = SelectedCollection?.Requests.FirstOrDefault(request => string.Equals(request.Id, tab.RequestId, StringComparison.OrdinalIgnoreCase));
+        SelectedRequest = SelectedCollection?.Requests.FirstOrDefault(request =>
+            string.Equals(GetRequestSourceKey(SelectedCollection, request), tab.SourceKey, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(request.Id, tab.RequestId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void ApplyTabToRequest(RequestWorkspaceTab tab, ReadableRequest request)
@@ -1326,11 +1734,29 @@ public sealed class ApiClientWorkspaceState
         return name;
     }
 
+    private string NextSpecificationName(string baseName)
+    {
+        var name = baseName;
+        var index = 2;
+        while (Specifications.Any(specification => string.Equals(specification.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            name = $"{baseName} {index}";
+            index++;
+        }
+
+        return name;
+    }
+
     private string GetCollectionDirectory(ReadableCollection collection)
     {
         return string.IsNullOrWhiteSpace(collection.RequestDirectory)
             ? Path.Combine(WorkspacePath, "requests", ToFileName(collection.Name))
             : Path.Combine(WorkspacePath, collection.RequestDirectory);
+    }
+
+    private string GetRequestSourceKey(ReadableCollection collection, ReadableRequest request)
+    {
+        return Path.Combine(GetCollectionDirectory(collection), $"{ToFileName(request.Name)}.json");
     }
 
     private static void OpenPathInShell(string path)
@@ -1407,6 +1833,11 @@ public sealed class ApiClientWorkspaceState
         return true;
     }
 
+    private static bool IsLooseRequestsCollection(ReadableCollection collection)
+    {
+        return string.Equals(collection.Id, LooseRequestsCollectionId, StringComparison.Ordinal);
+    }
+
     private void ResetSettingsDraft()
     {
         SettingsDraft = new AppSettingsDraft(
@@ -1451,6 +1882,22 @@ public sealed class ApiClientWorkspaceState
         {
             SpecFiles.Insert(0, path);
         }
+    }
+
+    private bool SpecificationPathMatches(ReadableSpecification specification, string path)
+    {
+        if (string.IsNullOrWhiteSpace(specification.Path))
+        {
+            return false;
+        }
+
+        var specificationPath = specification.Path;
+        var resolvedSpecificationPath = ResolveWorkspacePath(specificationPath);
+        var resolvedCandidatePath = ResolveWorkspacePath(path);
+        return string.Equals(specificationPath, path, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(resolvedSpecificationPath, path, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(specificationPath, resolvedCandidatePath, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(resolvedSpecificationPath, resolvedCandidatePath, StringComparison.OrdinalIgnoreCase);
     }
 
     private void AddLocalSpecification(string path)
@@ -1508,6 +1955,11 @@ public sealed class ApiClientWorkspaceState
         {
             WorkspaceOptions.Insert(0, path);
         }
+    }
+
+    private static bool IsWorkspaceUsable(string path)
+    {
+        return !string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, "workspace.json"));
     }
 
     private static string WorkspaceDisplayName(string path)

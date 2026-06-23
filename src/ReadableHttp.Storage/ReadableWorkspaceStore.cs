@@ -75,6 +75,25 @@ public sealed class ReadableWorkspaceStore
         return requests;
     }
 
+    public async Task<IReadOnlyList<ReadableRequest>> LoadLooseRequestsAsync(
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        var requestDirectory = Path.Combine(workspacePath, "requests");
+        if (!Directory.Exists(requestDirectory))
+        {
+            return [];
+        }
+
+        var requests = new List<ReadableRequest>();
+        foreach (var file in Directory.EnumerateFiles(requestDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            requests.Add(await _jsonStorage.LoadAsync<ReadableRequest>(file, cancellationToken));
+        }
+
+        return requests;
+    }
+
     public async Task SaveCollectionRequestsAsync(
         string workspacePath,
         ReadableCollection collection,

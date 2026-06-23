@@ -96,6 +96,10 @@
     background: var(--accent);
 }
 
+.tab-origin.specificationconfig {
+    background: var(--warning);
+}
+
 .tab-origin.specificationdocument {
     background: var(--success);
 }
@@ -236,61 +240,7 @@
 }
 
 .blank-page {
-    display: grid;
-    align-content: center;
-    justify-items: center;
-    gap: 18px;
     background: var(--bg);
-    padding: 24px;
-    text-align: center;
-}
-
-.blank-copy {
-    display: grid;
-    gap: 7px;
-    max-width: 520px;
-}
-
-.blank-copy span {
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
-}
-
-.blank-copy strong {
-    color: var(--text);
-    font-size: 22px;
-}
-
-.blank-copy p {
-    margin: 0;
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.5;
-}
-
-.blank-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-}
-
-.blank-actions button {
-    height: 34px;
-    border: 1px solid var(--line);
-    border-radius: var(--control-radius);
-    background: var(--panel-2);
-    color: var(--text);
-    padding: 0 12px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.blank-actions button:hover {
-    border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
-    background: var(--panel-3);
 }
 
 .settings-page {
@@ -384,13 +334,38 @@
     color: var(--muted);
 }
 
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.config-grid span {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--control-radius);
+    background: var(--panel);
+    color: var(--muted);
+    padding: 9px 10px;
+    font-size: 12px;
+}
+
+.config-grid strong {
+    color: var(--text);
+    font-family: Consolas, "Cascadia Mono", monospace;
+}
+
 .spec-document-page {
     display: grid;
     min-height: 0;
     background: var(--bg);
 }
 
-.settings-section label {
+.settings-section label,
+.config-section label,
+.request-form label {
     display: grid;
     grid-template-columns: 140px minmax(0, 1fr);
     align-items: center;
@@ -400,7 +375,9 @@
 }
 
 .settings-section input,
-.settings-section select {
+.settings-section select,
+.config-section input,
+.request-form input {
     width: 100%;
     height: 34px;
     border: 1px solid var(--line);
@@ -408,6 +385,10 @@
     background: var(--panel-2);
     color: var(--text);
     padding: 0 10px;
+}
+
+.config-section input[readonly] {
+    color: var(--muted);
 }
 
 .settings-section .settings-check {
@@ -491,6 +472,11 @@
     border-bottom: 1px solid var(--line);
     background: var(--panel);
     padding: 8px 12px;
+}
+
+.request-form {
+    display: grid;
+    gap: 8px;
 }
 
 .param-table {
