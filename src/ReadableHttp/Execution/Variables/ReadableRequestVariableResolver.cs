@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using ReadableHttp.Core;
+using ReadableHttp;
 
 namespace ReadableHttp.Execution;
 

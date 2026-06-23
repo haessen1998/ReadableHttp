@@ -1,4 +1,4 @@
-namespace ReadableHttp.Core;
+namespace ReadableHttp;
 
 public static class ReadableHttpFormat
 {

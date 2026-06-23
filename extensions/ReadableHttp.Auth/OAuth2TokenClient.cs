@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Serialization;
-using ReadableHttp.Core;
+using ReadableHttp;
 
 namespace ReadableHttp.Auth;
 

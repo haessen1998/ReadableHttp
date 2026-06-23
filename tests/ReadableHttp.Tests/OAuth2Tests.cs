@@ -1,5 +1,5 @@
 using ReadableHttp.Auth;
-using ReadableHttp.Core;
+using ReadableHttp;
 using System.Net;
 using System.Text;
 

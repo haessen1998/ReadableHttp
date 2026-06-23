@@ -2,10 +2,12 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Description>ASP.NET Core dependency injection integration for ReadableHttp.</Description>
-    <PackageVersion>0.1.0</PackageVersion>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>http;api;rest;aspnetcore;dependency-injection;ihttpclientfactory</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
     <ProjectReference Include="..\ReadableHttp\ReadableHttp.csproj" />
   </ItemGroup>

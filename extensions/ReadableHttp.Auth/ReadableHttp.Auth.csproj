@@ -4,10 +4,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Description>OAuth2, PKCE, and localhost callback helpers for ReadableHttp.</Description>
-    <PackageVersion>0.1.0</PackageVersion>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>http;api;oauth2;pkce;authentication</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <ProjectReference Include="..\..\src\ReadableHttp\ReadableHttp.csproj" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,3 @@
-using ReadableHttp.Core;
 using ReadableHttp;
 
 var exchange = await ReadableHttpClient

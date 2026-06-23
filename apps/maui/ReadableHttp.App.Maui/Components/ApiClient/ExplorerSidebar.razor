@@ -1,4 +1,4 @@
-@using ReadableHttp.Core
+@using ReadableHttp
 @using System.Text.Json
 
 <aside class="sidebar-panel" @onclick="CloseFlyouts">
@@ -47,24 +47,32 @@
                 @foreach (var item in FilteredWorkspaceOptions)
                 {
                     var isActiveWorkspace = string.Equals(WorkspacePath, item, StringComparison.OrdinalIgnoreCase);
+                    var isUsableWorkspace = IsWorkspaceUsable(item);
                     <div @key="item" class="@WorkspaceClass(item)">
-                        <button class="workspace-main" @onclick="() => OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(item))">
+                        <button class="workspace-main" title="@WorkspaceMainTitle(isUsableWorkspace)" @onclick="() => SelectWorkspaceIfUsable(item)">
                             <span class="check-mark"></span>
                             <span>@WorkspaceLabel(item)</span>
                         </button>
                         <div class='@RowActionsClass(MenuKey("workspace", item))' @onclick:stopPropagation="true">
+                            @if (!isUsableWorkspace)
+                            {
+                                <button title="Remove unavailable workspace" @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))">×</button>
+                            }
                             <button title="More" @onclick='() => ToggleMore(MenuKey("workspace", item))'>···</button>
                             <div class="more-menu">
-                                <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Configure</button>
-                                <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Open in Explorer</button>
-                                @if (isActiveWorkspace)
+                                @if (isUsableWorkspace)
                                 {
-                                    <button @onclick="OnSaveWorkspace">Save</button>
-                                    @if (IsGitWorkspace)
+                                    <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Configure</button>
+                                    <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Open in Explorer</button>
+                                    @if (isActiveWorkspace)
                                     {
-                                        <button @onclick="OnGitStatus">Git status</button>
-                                        <button @onclick="OnGitPull">Git pull</button>
-                                        <button @onclick="OnGitPush">Git push</button>
+                                        <button @onclick="OnSaveWorkspace">Save</button>
+                                        @if (IsGitWorkspace)
+                                        {
+                                            <button @onclick="OnGitStatus">Git status</button>
+                                            <button @onclick="OnGitPull">Git pull</button>
+                                            <button @onclick="OnGitPush">Git push</button>
+                                        }
                                     }
                                 }
                                 <button class="danger-menu" @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Remove from List</button>
@@ -83,10 +91,13 @@
                 <span>@(ShowCollectionsSection ? "▾" : "▸")</span>
                 <strong>Collections</strong>
             </button>
-            <div class="title-actions">
-                <button title="New collection" @onclick="OnNewCollection">＋</button>
-                <button title="Reload collections" @onclick="OnLoadWorkspace">↻</button>
-            </div>
+            @if (HasActiveWorkspace)
+            {
+                <div class="title-actions">
+                    <button title="New collection" @onclick="OnNewCollection">＋</button>
+                    <button title="Reload collections" @onclick="OnLoadWorkspace">↻</button>
+                </div>
+            }
         </div>
         @if (ShowCollectionsSection && FilteredCollections.Count == 0)
         {
@@ -158,14 +169,17 @@
                 <span>@(ShowSpecsSection ? "▾" : "▸")</span>
                 <strong>Specifications</strong>
             </button>
-            <div class='@TitleActionsClass(MenuKey("add", "specification"))' @onclick:stopPropagation="true">
-                <button title="Add specification" @onclick='() => ToggleMore(MenuKey("add", "specification"))'>＋</button>
-                <div class="more-menu">
-                    <button @onclick="OnPickTryFile">Local file</button>
-                    <button @onclick="OnNewRemoteSpecification">Remote endpoint</button>
+            @if (HasActiveWorkspace)
+            {
+                <div class='@TitleActionsClass(MenuKey("add", "specification"))' @onclick:stopPropagation="true">
+                    <button title="Add specification" @onclick='() => ToggleMore(MenuKey("add", "specification"))'>＋</button>
+                    <div class="more-menu">
+                        <button @onclick="OnPickTryFile">Local file</button>
+                        <button @onclick="OnNewRemoteSpecification">Remote endpoint</button>
+                    </div>
+                    <button title="Load current specification" @onclick="OnLoadTryDocument">↻</button>
                 </div>
-                <button title="Load current specification" @onclick="OnLoadTryDocument">↻</button>
-            </div>
+            }
         </div>
         @if (ShowSpecsSection && FilteredSpecifications.Count == 0)
         {
@@ -304,6 +318,8 @@
 
     private bool HasOpenFlyout => quickSwitchOpen || openMenuKey is not null;
 
+    private bool HasActiveWorkspace => IsWorkspaceUsable(WorkspacePath);
+
     private string Query => searchText.Trim();
 
     private string WorkspaceTypeLabel => IsGitWorkspace ? "Git workspace" : "Local workspace";
@@ -360,6 +376,16 @@
     private async Task SelectWorkspaceFromQuickSwitch(string path)
     {
         quickSwitchOpen = false;
+        await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(path));
+    }
+
+    private async Task SelectWorkspaceIfUsable(string path)
+    {
+        if (!IsWorkspaceUsable(path))
+        {
+            return;
+        }
+
         await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(path));
     }
 
@@ -451,6 +477,10 @@
     {
         return !string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, "workspace.json"));
     }
+
+    private static string WorkspaceMainTitle(bool isUsable) => isUsable
+        ? "Load workspace"
+        : "Workspace unavailable";
 
     private string CollectionClass(ReadableCollection collection)
     {

@@ -4,10 +4,10 @@ ReadableHttp is a .NET-first HTTP toolkit for readable SDK calls, raw request ex
 
 The repository layout separates distributable SDK packages, optional extensions, application surfaces, application support libraries, and publish outputs:
 
-- `src/ReadableHttp`: the main NuGet package. It contains the public SDK surface plus the `Core` and `Execution` source modules.
+- `src/ReadableHttp`: the main NuGet package. It contains the public SDK surface, request/response models, execution engine, variable resolution, streaming, and schema assets.
 - `src/ReadableHttp.AspNetCore`: ASP.NET Core `IHttpClientFactory` and DI integration for the main SDK.
 - `extensions/ReadableHttp.Auth`: OAuth2, PKCE, token cache, and loopback callback helpers.
-- `extensions/ReadableHttp.ImportExport`: `.http`, curl, OpenAPI/Swagger, and request import/export helpers.
+- `extensions/ReadableHttp.ImportExport`: `.http`, curl, OpenAPI/Swagger, and request import/export helpers, organized by import/export format.
 - `apps/supports/ReadableHttp.Storage`: JSON load/save helpers for request and workspace files.
 - `apps/supports/ReadableHttp.Try`: in-memory Try document normalization for OpenAPI, `.http`, curl, and ReadableHttp request files.
 - `apps/supports/ReadableHttp.AI`: extension contracts for AI-assisted request generation and response analysis.
@@ -18,13 +18,16 @@ The repository layout separates distributable SDK packages, optional extensions,
 - `samples/workspaces/example`: the single example workspace, including requests, environments, imports, and specifications.
 - `publish/maui`, `publish/cli`, `publish/nugets`: ignored output folders for publish artifacts.
 
-Inside the main package, source folders keep the boundaries clear:
+Inside the main package, source folders keep the boundaries clear without preserving the old package layout:
 
-- `src/ReadableHttp/Core`: JSON-serializable request, response, exchange, auth, environment, collection, and workspace models.
+- `src/ReadableHttp/Client`: fluent SDK facade for direct code usage.
+- `src/ReadableHttp/Models`: JSON-serializable request, response, exchange, auth, variable, stream, and workspace models grouped by domain.
 - `src/ReadableHttp/Execution`: raw execution engine, request materialization, variable resolution, redirects, cookies, response capture, and streaming.
-- `src/ReadableHttp`: fluent SDK facade for direct code usage.
+- `src/ReadableHttp/Formatting`: shared request/response formatting helpers.
 
-The `ReadableHttp.Core` and `ReadableHttp.Execution` namespaces remain public for compatibility, but they are no longer separate project or package outputs.
+Inside `ReadableHttp.ImportExport`, format-specific code is grouped under `Curl`, `HttpFiles`, and `OpenApi`.
+
+Model types live in the main `ReadableHttp` namespace. Execution contracts and executors live under `ReadableHttp.Execution`.
 
 ## SDK
 
@@ -53,7 +56,6 @@ Streaming APIs such as Server-Sent Events can be consumed without buffering the 
 
 ```csharp
 using ReadableHttp;
-using ReadableHttp.Core;
 
 await foreach (var message in ReadableHttpClient
     .Request("https://api.example.com/chat")
@@ -136,7 +138,7 @@ Use `ReadableHttp.AspNetCore` when you want `IHttpClientFactory` integration and
 
 ```csharp
 using ReadableHttp.AspNetCore;
-using ReadableHttp.Core;
+using ReadableHttp;
 using ReadableHttp.Execution;
 
 var builder = WebApplication.CreateBuilder(args);

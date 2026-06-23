@@ -1,4 +1,4 @@
-using ReadableHttp.Core;
+using ReadableHttp;
 using ReadableHttp.ImportExport;
 
 namespace ReadableHttp.Tests;

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ReadableHttp.Core;
+namespace ReadableHttp;
 
 public sealed class ReadableExecutionContext
 {

@@ -2,10 +2,12 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Description>Readable .NET HTTP SDK with core models, request execution, streaming, and fluent client APIs.</Description>
-    <PackageVersion>0.1.0</PackageVersion>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>http;api;rest;sdk;streaming</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\schemas\**\*.json" Pack="true" PackagePath="schemas\" />
   </ItemGroup>
 </Project>

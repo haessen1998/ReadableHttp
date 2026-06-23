@@ -383,6 +383,14 @@
     color: var(--muted-2);
 }
 
+.workspace-option.unavailable .workspace-main {
+    cursor: default;
+}
+
+.workspace-option.unavailable .row-actions {
+    opacity: 1;
+}
+
 .workspace-option.unavailable .check-mark {
     border-color: var(--danger);
     background: transparent;
@@ -505,6 +513,11 @@
 .workspace-option .row-actions,
 .request-row .row-actions {
     opacity: 0.62;
+}
+
+.workspace-option .row-actions.open,
+.request-row .row-actions.open {
+    opacity: 1;
 }
 
 .row-actions button {
@@ -643,9 +656,9 @@
     min-width: 146px;
     border: 1px solid color-mix(in srgb, var(--line) 70%, var(--text));
     border-radius: 6px;
-    background: rgba(17, 23, 34, 0.97);
+    background: rgba(17, 23, 34, 0.9);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
-    opacity: 1;
+    opacity: 0.77;
     padding: 4px;
 }
 

@@ -3,11 +3,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Description>Import and export helpers for .http and curl formats.</Description>
-    <PackageVersion>0.1.0</PackageVersion>
+    <Description>Import and export helpers for .http, curl, OpenAPI, and Swagger formats.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>http;api;openapi;swagger;curl;http-file;import;export</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <ProjectReference Include="..\..\src\ReadableHttp\ReadableHttp.csproj" />
   </ItemGroup>

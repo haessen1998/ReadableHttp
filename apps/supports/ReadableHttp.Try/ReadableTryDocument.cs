@@ -1,4 +1,4 @@
-using ReadableHttp.Core;
+using ReadableHttp;
 
 namespace ReadableHttp.Try;
 

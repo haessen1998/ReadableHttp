@@ -1,4 +1,4 @@
-using ReadableHttp.Core;
+using ReadableHttp;
 using ReadableHttp.Storage;
 using System.Security.Cryptography;
 using System.Text;

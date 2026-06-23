@@ -1,4 +1,4 @@
-using ReadableHttp.Core;
+using ReadableHttp;
 
 internal static class ReadableCliOptions
 {

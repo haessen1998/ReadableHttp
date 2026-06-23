@@ -1,12 +1,22 @@
 name: Publish NuGet
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Push packages to nuget.org"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-publish:
+  pack:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,23 +26,36 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore FluentHttp.sln
+        run: dotnet restore tests/ReadableHttp.Tests/ReadableHttp.Tests.csproj
 
-      - name: Build
-        run: dotnet build FluentHttp.sln --configuration Release --no-restore
+      - name: Test
+        run: dotnet test tests/ReadableHttp.Tests/ReadableHttp.Tests.csproj --configuration Release --no-restore
 
-      - name: Pack FluentHttp.Json
-        run: dotnet pack FluentHttp.Json/FluentHttp.Json.csproj --configuration Release --no-build --output ./publish
+      - name: Build packages
+        run: |
+          dotnet build src/ReadableHttp/ReadableHttp.csproj --configuration Release --no-restore
+          dotnet build src/ReadableHttp.AspNetCore/ReadableHttp.AspNetCore.csproj --configuration Release --no-restore
+          dotnet build extensions/ReadableHttp.Auth/ReadableHttp.Auth.csproj --configuration Release --no-restore
+          dotnet build extensions/ReadableHttp.ImportExport/ReadableHttp.ImportExport.csproj --configuration Release --no-restore
 
-      - name: Pack FluentHttpFactory
-        run: dotnet pack FluentHttpFactory/FluentHttpFactory.csproj --configuration Release --no-build --output ./publish
+      - name: Pack
+        run: |
+          dotnet pack src/ReadableHttp/ReadableHttp.csproj --configuration Release --no-build --output publish/nugets
+          dotnet pack src/ReadableHttp.AspNetCore/ReadableHttp.AspNetCore.csproj --configuration Release --no-build --output publish/nugets
+          dotnet pack extensions/ReadableHttp.Auth/ReadableHttp.Auth.csproj --configuration Release --no-build --output publish/nugets
+          dotnet pack extensions/ReadableHttp.ImportExport/ReadableHttp.ImportExport.csproj --configuration Release --no-build --output publish/nugets
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: publish/nugets/*.nupkg
 
       - name: Publish to nuget.org
+        if: ${{ inputs.publish == 'true' }}
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: dotnet nuget push ./publish/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "publish/nugets/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate

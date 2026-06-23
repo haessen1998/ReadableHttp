@@ -1,5 +1,5 @@
 using System.Web;
-using ReadableHttp.Core;
+using ReadableHttp;
 
 namespace ReadableHttp.Auth;
 

@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
-using ReadableHttp.Core;
+using ReadableHttp;
 using ReadableHttp.Execution;
 
 namespace ReadableHttp.Tests;
@@ -157,6 +157,33 @@ public sealed class ReadableHttpExecutorTests
         Assert.Equal("Bearer", handler.Requests[1].Headers.Authorization?.Scheme);
         Assert.True(handler.Requests[2].Headers.TryGetValues("x-api-key", out var values));
         Assert.Equal("key", Assert.Single(values));
+    }
+
+    [Fact]
+    public async Task SendAsync_does_not_mutate_request_when_auth_uses_query()
+    {
+        var handler = new MockHttpMessageHandler((_, _) =>
+            Task.FromResult(MockHttpMessageHandler.Json(HttpStatusCode.OK, "{}")));
+        var executor = new ReadableHttpExecutor(handler);
+        var request = new ReadableRequest
+        {
+            Method = "GET",
+            Url = "https://api.example.test/key",
+            Auth = new ReadableAuth
+            {
+                Type = ReadableAuthType.ApiKey,
+                Name = "api_key",
+                Value = "secret",
+                ApiKeyLocation = ReadableApiKeyLocation.Query
+            }
+        };
+
+        await executor.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+        await executor.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Empty(request.Query);
+        Assert.Equal("https://api.example.test/key?api_key=secret", handler.Requests[0].RequestUri?.ToString());
+        Assert.Equal("https://api.example.test/key?api_key=secret", handler.Requests[1].RequestUri?.ToString());
     }
 
     [Fact]

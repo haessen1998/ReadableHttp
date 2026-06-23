@@ -1,5 +1,5 @@
 using ReadableHttp.Try;
-using ReadableHttp.Core;
+using ReadableHttp;
 
 namespace ReadableHttp.Tests;
 

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using ReadableHttp.Core;
-using ReadableHttp.OpenApi;
+using ReadableHttp;
+using ReadableHttp.ImportExport.OpenApi;
 
 namespace ReadableHttp.ImportExport;
 

@@ -1,7 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using ReadableHttp.AspNetCore;
-using ReadableHttp.Core;
+using ReadableHttp;
 using ReadableHttp.Execution;
 
 namespace ReadableHttp.Tests;

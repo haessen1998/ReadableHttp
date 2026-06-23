@@ -1,10 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using ReadableHttp.Core;
+using ReadableHttp;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace ReadableHttp.OpenApi;
+namespace ReadableHttp.ImportExport.OpenApi;
 
 public sealed class OpenApiRequestFactory
 {

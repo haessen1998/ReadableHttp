@@ -1,5 +1,5 @@
 using ReadableHttp.AspNetCore;
-using ReadableHttp.Core;
+using ReadableHttp;
 
 var builder = WebApplication.CreateBuilder(args);
 

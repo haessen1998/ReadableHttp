@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using ReadableHttp.Core;
+using ReadableHttp;
 
 namespace ReadableHttp.Execution;
 
@@ -11,13 +11,17 @@ internal static class ReadableHttpRequestMessageFactory
 {
     public static HttpRequestMessage Create(ReadableRequest request, ReadableExecutionContext context)
     {
-        var url = BuildUrl(request);
+        var query = request.Query.Where(item => item.Enabled).ToList();
+        var auth = request.Auth ?? context.Auth;
+        ApplyAuth(auth, request, query);
+
+        var url = BuildUrl(request, query);
         var message = new HttpRequestMessage(new HttpMethod(request.Method), url)
         {
             Content = CreateContent(request.Body)
         };
 
-        ApplyAuth(request.Auth ?? context.Auth, request, message);
+        ApplyAuthHeader(auth, request, message);
 
         foreach (var header in request.Headers.Where(header => header.Enabled))
         {
@@ -43,6 +47,11 @@ internal static class ReadableHttpRequestMessageFactory
 
     public static string BuildUrl(ReadableRequest request)
     {
+        return BuildUrl(request, request.Query.Where(item => item.Enabled));
+    }
+
+    private static string BuildUrl(ReadableRequest request, IEnumerable<ReadableNameValue> query)
+    {
         var url = request.Url;
         foreach (var parameter in request.PathParameters.Where(parameter => parameter.Enabled))
         {
@@ -50,8 +59,8 @@ internal static class ReadableHttpRequestMessageFactory
                 .Replace("{{" + parameter.Name + "}}", Uri.EscapeDataString(parameter.Value ?? string.Empty), StringComparison.OrdinalIgnoreCase);
         }
 
-        var enabledQuery = request.Query
-            .Where(item => item.Enabled && !string.IsNullOrWhiteSpace(item.Name))
+        var enabledQuery = query
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
             .Select(item => $"{Uri.EscapeDataString(item.Name)}={Uri.EscapeDataString(item.Value ?? string.Empty)}")
             .ToArray();
 
@@ -183,7 +192,28 @@ internal static class ReadableHttpRequestMessageFactory
         return content;
     }
 
-    private static void ApplyAuth(ReadableAuth? auth, ReadableRequest request, HttpRequestMessage message)
+    private static void ApplyAuth(ReadableAuth? auth, ReadableRequest request, List<ReadableNameValue> query)
+    {
+        if (auth is null || auth.Type is ReadableAuthType.None or ReadableAuthType.Inherit)
+        {
+            return;
+        }
+
+        switch (auth.Type)
+        {
+            case ReadableAuthType.ApiKey when auth.ApiKeyLocation == ReadableApiKeyLocation.Query:
+                AddQueryParameter(query, auth.Name, auth.Value);
+                break;
+            case ReadableAuthType.OAuth2 when auth.OAuth2 is not null:
+                ApplyOAuth2Query(auth.OAuth2, query);
+                break;
+            case ReadableAuthType.OAuth1 when auth.OAuth1 is not null:
+                ApplyOAuth1Query(auth.OAuth1, request, query);
+                break;
+        }
+    }
+
+    private static void ApplyAuthHeader(ReadableAuth? auth, ReadableRequest request, HttpRequestMessage message)
     {
         if (auth is null || auth.Type is ReadableAuthType.None or ReadableAuthType.Inherit)
         {
@@ -205,29 +235,37 @@ internal static class ReadableHttpRequestMessageFactory
                     message.Headers.TryAddWithoutValidation(auth.Name, auth.Value ?? string.Empty);
                 }
                 break;
-            case ReadableAuthType.ApiKey when auth.ApiKeyLocation == ReadableApiKeyLocation.Query:
-                if (!string.IsNullOrWhiteSpace(auth.Name))
-                {
-                    request.Query.Add(new ReadableNameValue
-                    {
-                        Name = auth.Name,
-                        Value = auth.Value,
-                        Enabled = true
-                    });
-                    message.RequestUri = new Uri(BuildUrl(request), UriKind.RelativeOrAbsolute);
-                }
-                break;
             case ReadableAuthType.OAuth2 when auth.OAuth2 is not null:
-                ApplyOAuth2(auth.OAuth2, message, request);
+                ApplyOAuth2Header(auth.OAuth2, message);
                 break;
             case ReadableAuthType.OAuth1 when auth.OAuth1 is not null:
-                ApplyOAuth1(auth.OAuth1, message, request);
+                ApplyOAuth1Header(auth.OAuth1, message, request);
                 break;
         }
     }
 
-    private static void ApplyOAuth2(ReadableOAuth2Options options, HttpRequestMessage message, ReadableRequest request)
+    private static void AddQueryParameter(List<ReadableNameValue> query, string? name, string? value)
     {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        query.Add(new ReadableNameValue
+        {
+            Name = name,
+            Value = value,
+            Enabled = true
+        });
+    }
+
+    private static void ApplyOAuth2Header(ReadableOAuth2Options options, HttpRequestMessage message)
+    {
+        if (options.TokenPlacement != ReadableTokenPlacement.Header)
+        {
+            return;
+        }
+
         var token = options.ExtraParameters.TryGetValue(options.TokenId, out var storedToken)
             ? storedToken
             : null;
@@ -241,29 +279,64 @@ internal static class ReadableHttpRequestMessageFactory
             ? token
             : $"{options.HeaderPrefix} {token}";
 
-        if (options.TokenPlacement == ReadableTokenPlacement.Header)
-        {
-            message.Headers.TryAddWithoutValidation(options.TokenName, value);
-        }
-        else if (options.TokenPlacement == ReadableTokenPlacement.Query)
-        {
-            request.Query.Add(new ReadableNameValue { Name = options.TokenName, Value = token });
-            message.RequestUri = new Uri(BuildUrl(request), UriKind.RelativeOrAbsolute);
-        }
+        message.Headers.TryAddWithoutValidation(options.TokenName, value);
     }
 
-    private static void ApplyOAuth1(ReadableOAuth1Options options, HttpRequestMessage message, ReadableRequest request)
+    private static void ApplyOAuth2Query(ReadableOAuth2Options options, List<ReadableNameValue> query)
     {
-        if (string.IsNullOrWhiteSpace(options.ConsumerKey) || string.IsNullOrWhiteSpace(options.ConsumerSecret))
+        if (options.TokenPlacement != ReadableTokenPlacement.Query)
         {
             return;
         }
 
+        var token = options.ExtraParameters.TryGetValue(options.TokenId, out var storedToken)
+            ? storedToken
+            : null;
+
+        AddQueryParameter(query, options.TokenName, token);
+    }
+
+    private static void ApplyOAuth1Header(ReadableOAuth1Options options, HttpRequestMessage message, ReadableRequest request)
+    {
+        if (options.Placement != ReadableTokenPlacement.Header
+            || string.IsNullOrWhiteSpace(options.ConsumerKey)
+            || string.IsNullOrWhiteSpace(options.ConsumerSecret))
+        {
+            return;
+        }
+
+        var parameters = CreateOAuth1Parameters(options, request.Method, BuildUrl(request));
+        var header = "OAuth " + string.Join(", ", parameters.Select(pair =>
+            $"{Uri.EscapeDataString(pair.Key)}=\"{Uri.EscapeDataString(pair.Value)}\""));
+        message.Headers.TryAddWithoutValidation("Authorization", header);
+    }
+
+    private static void ApplyOAuth1Query(ReadableOAuth1Options options, ReadableRequest request, List<ReadableNameValue> query)
+    {
+        if (options.Placement != ReadableTokenPlacement.Query
+            || string.IsNullOrWhiteSpace(options.ConsumerKey)
+            || string.IsNullOrWhiteSpace(options.ConsumerSecret))
+        {
+            return;
+        }
+
+        var parameters = CreateOAuth1Parameters(options, request.Method, BuildUrl(request, query));
+        foreach (var parameter in parameters)
+        {
+            AddQueryParameter(query, parameter.Key, parameter.Value);
+        }
+    }
+
+    private static SortedDictionary<string, string> CreateOAuth1Parameters(
+        ReadableOAuth1Options options,
+        string method,
+        string url)
+    {
         var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
         var parameters = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
-            ["oauth_consumer_key"] = options.ConsumerKey,
+            ["oauth_consumer_key"] = options.ConsumerKey ?? string.Empty,
             ["oauth_nonce"] = nonce,
             ["oauth_signature_method"] = ToOAuth1SignatureMethod(options.SignatureMethod),
             ["oauth_timestamp"] = timestamp,
@@ -275,24 +348,8 @@ internal static class ReadableHttpRequestMessageFactory
             parameters["oauth_token"] = options.Token;
         }
 
-        var signature = CreateOAuth1Signature(options, request.Method, BuildUrl(request), parameters);
-        parameters["oauth_signature"] = signature;
-        var header = "OAuth " + string.Join(", ", parameters.Select(pair =>
-            $"{Uri.EscapeDataString(pair.Key)}=\"{Uri.EscapeDataString(pair.Value)}\""));
-
-        if (options.Placement == ReadableTokenPlacement.Header)
-        {
-            message.Headers.TryAddWithoutValidation("Authorization", header);
-        }
-        else if (options.Placement == ReadableTokenPlacement.Query)
-        {
-            foreach (var parameter in parameters)
-            {
-                request.Query.Add(new ReadableNameValue { Name = parameter.Key, Value = parameter.Value });
-            }
-
-            message.RequestUri = new Uri(BuildUrl(request), UriKind.RelativeOrAbsolute);
-        }
+        parameters["oauth_signature"] = CreateOAuth1Signature(options, method, url, parameters);
+        return parameters;
     }
 
     private static string CreateOAuth1Signature(

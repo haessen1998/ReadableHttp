@@ -1,5 +1,5 @@
 using System.Text.Json;
-using ReadableHttp.Core;
+using ReadableHttp;
 using ReadableHttp.Execution;
 
 namespace ReadableHttp;

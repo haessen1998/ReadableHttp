@@ -1,4 +1,4 @@
-using ReadableHttp.Core;
+using ReadableHttp;
 using ReadableHttp.Execution;
 using ReadableHttp.Storage;
 using ReadableHttp.Try;
@@ -520,6 +520,14 @@ public sealed class ApiClientWorkspaceState
 
     public async Task PickTryFileAsync()
     {
+        if (Workspace is null)
+        {
+            WorkspaceStatus = "请先新建或加载 workspace";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+            return;
+        }
+
         var path = await _filePicker.PickTryFileAsync();
         if (!string.IsNullOrWhiteSpace(path))
         {
@@ -530,10 +538,7 @@ public sealed class ApiClientWorkspaceState
             DocumentTitle = Path.GetFileName(path);
             ViewMode = "preview";
             SaveSettings();
-            if (Workspace is not null)
-            {
-                await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
-            }
+            await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
             NotifyChanged();
         }
     }
@@ -691,21 +696,7 @@ public sealed class ApiClientWorkspaceState
         CustomProxyPassword = SettingsDraft.CustomProxyPassword;
         Language = string.IsNullOrWhiteSpace(SettingsDraft.Language) ? "system" : SettingsDraft.Language;
         DevToolsEnabled = SettingsDraft.DevToolsEnabled;
-        _settingsStore.Save(new AppSettings
-        {
-            WorkspacePath = WorkspacePath,
-            TryFilePath = TryFilePath,
-            WorkspaceHistory = string.Join('|', WorkspaceOptions),
-            Language = Language,
-            ThemeMode = ThemeMode,
-            DarkMode = DarkMode,
-            ProxyMode = ProxyMode,
-            CustomProxyUrl = CustomProxyUrl,
-            CustomProxyUsername = CustomProxyUsername,
-            CustomProxyPassword = CustomProxyPassword,
-            UseSystemProxy = UseSystemProxy,
-            DevToolsEnabled = DevToolsEnabled
-        });
+        PersistSettings();
         AddActivity("Settings", "配置已保存");
         NotifyChanged();
     }
@@ -771,7 +762,7 @@ public sealed class ApiClientWorkspaceState
 
     public void NewCollection()
     {
-        if (Workspace is null)
+        if (Workspace is null || !ValidateWorkspacePath(WorkspacePath, out _))
         {
             WorkspaceStatus = "请先新建或加载 workspace";
             AddActivity("Workspace", WorkspaceStatus);
@@ -1015,7 +1006,29 @@ public sealed class ApiClientWorkspaceState
     public void RemoveWorkspaceOption(string path)
     {
         WorkspaceOptions.RemoveAll(item => string.Equals(item, path, StringComparison.OrdinalIgnoreCase));
-        SaveSettings();
+        if (string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            WorkspacePath = string.Empty;
+            Workspace = null;
+            Collections = [];
+            SelectedCollection = null;
+            SelectedRequest = null;
+            SelectedSpecification = null;
+            Operations = [];
+            RawContent = string.Empty;
+            DocumentTitle = "Scratch Request";
+            ActiveSource = "Request";
+            WorkspaceStatus = "Workspace removed from history";
+            RequestTabs.RemoveAll(tab => tab.Origin is RequestTabOrigin.Workspace
+                or RequestTabOrigin.CollectionConfig
+                or RequestTabOrigin.Collection
+                or RequestTabOrigin.SpecificationConfig
+                or RequestTabOrigin.SpecificationDocument);
+            ActiveRequestTabId = RequestTabs.FirstOrDefault()?.Id;
+        }
+
+        PersistSettings();
+        AddActivity("Workspace", $"已从历史移除 {WorkspaceDisplayName(path)}");
         NotifyChanged();
     }
 
@@ -1854,6 +1867,25 @@ public sealed class ApiClientWorkspaceState
     {
         SettingsDraft = draft;
         NotifyChanged();
+    }
+
+    private void PersistSettings()
+    {
+        _settingsStore.Save(new AppSettings
+        {
+            WorkspacePath = WorkspacePath,
+            TryFilePath = TryFilePath,
+            WorkspaceHistory = string.Join('|', WorkspaceOptions),
+            Language = Language,
+            ThemeMode = ThemeMode,
+            DarkMode = DarkMode,
+            ProxyMode = ProxyMode,
+            CustomProxyUrl = CustomProxyUrl,
+            CustomProxyUsername = CustomProxyUsername,
+            CustomProxyPassword = CustomProxyPassword,
+            UseSystemProxy = UseSystemProxy,
+            DevToolsEnabled = DevToolsEnabled
+        });
     }
 
     private static string NormalizeThemeMode(string value)
