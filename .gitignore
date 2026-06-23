@@ -3,6 +3,14 @@ bin/
 obj/
 .artifacts/
 .build/
+publish/*
+!publish/.gitkeep
+!publish/maui/
+!publish/maui/.gitkeep
+!publish/cli/
+!publish/cli/.gitkeep
+!publish/nugets/
+!publish/nugets/.gitkeep
 
 # Visual Studio
 .vs/

@@ -1,12 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Description>Readable .NET HTTP SDK built on the ReadableHttp execution engine.</Description>
+    <Description>Readable .NET HTTP SDK with core models, request execution, streaming, and fluent client APIs.</Description>
     <PackageVersion>0.1.0</PackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ReadableHttp.Core\ReadableHttp.Core.csproj" />
-    <ProjectReference Include="..\ReadableHttp.Execution\ReadableHttp.Execution.csproj" />
+    <None Include="..\..\schemas\**\*.json" Pack="true" PackagePath="schemas\" />
   </ItemGroup>
 </Project>

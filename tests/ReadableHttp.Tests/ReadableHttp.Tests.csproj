@@ -13,12 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ReadableHttp.Core\ReadableHttp.Core.csproj" />
-    <ProjectReference Include="..\..\src\ReadableHttp.Auth\ReadableHttp.Auth.csproj" />
+    <ProjectReference Include="..\..\src\ReadableHttp\ReadableHttp.csproj" />
+    <ProjectReference Include="..\..\extensions\ReadableHttp.Auth\ReadableHttp.Auth.csproj" />
     <ProjectReference Include="..\..\src\ReadableHttp.AspNetCore\ReadableHttp.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\src\ReadableHttp.Execution\ReadableHttp.Execution.csproj" />
-    <ProjectReference Include="..\..\src\ReadableHttp.ImportExport\ReadableHttp.ImportExport.csproj" />
-    <ProjectReference Include="..\..\src\ReadableHttp.Storage\ReadableHttp.Storage.csproj" />
-    <ProjectReference Include="..\..\src\ReadableHttp.Try\ReadableHttp.Try.csproj" />
+    <ProjectReference Include="..\..\extensions\ReadableHttp.ImportExport\ReadableHttp.ImportExport.csproj" />
+    <ProjectReference Include="..\..\apps\supports\ReadableHttp.Storage\ReadableHttp.Storage.csproj" />
+    <ProjectReference Include="..\..\apps\supports\ReadableHttp.Try\ReadableHttp.Try.csproj" />
   </ItemGroup>
 </Project>

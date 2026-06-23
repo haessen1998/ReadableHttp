@@ -1,0 +1,263 @@
+{
+  "schemaVersion": "1.0",
+  "id": "65c531748a964b7daee500c1d3f68320",
+  "name": "Example Workspace",
+  "type": "local",
+  "git": null,
+  "variables": {},
+  "collections": [
+    {
+      "schemaVersion": "1.0",
+      "id": "8d66a3705cb8464cabd922b1ef421254",
+      "name": "HTTPBin Examples",
+      "sourceType": "local",
+      "requestDirectory": "requests/httpbin",
+      "variables": {},
+      "requests": [
+        {
+          "schemaVersion": "1.0",
+          "id": "ba6201fa357545688bc61f3f9f30c23c",
+          "name": "get-with-query",
+          "method": "GET",
+          "url": "{{baseUrl}}/get",
+          "pathParameters": [],
+          "query": [
+            {
+              "name": "keyword",
+              "value": "{{keyword}}",
+              "enabled": true,
+              "description": null
+            }
+          ],
+          "headers": [
+            {
+              "name": "accept",
+              "value": "application/json",
+              "enabled": true,
+              "description": null
+            }
+          ],
+          "body": null,
+          "auth": null,
+          "options": {
+            "timeout": null,
+            "followRedirects": null,
+            "useCookies": null,
+            "ignoreSslErrors": null,
+            "proxy": null
+          },
+          "variables": {}
+        },
+        {
+          "schemaVersion": "1.0",
+          "id": "6a48b66b00dc42c1b2f38ca23592768a",
+          "name": "post-json",
+          "method": "POST",
+          "url": "{{baseUrl}}/post",
+          "pathParameters": [],
+          "query": [],
+          "headers": [
+            {
+              "name": "accept",
+              "value": "application/json",
+              "enabled": true,
+              "description": null
+            }
+          ],
+          "body": {
+            "type": "json",
+            "content": "{\n  \u0022name\u0022: \u0022ReadableHttp\u0022,\n  \u0022source\u0022: \u0022example-workspace\u0022\n}",
+            "contentType": "application/json",
+            "filePath": null,
+            "form": [],
+            "multipart": [],
+            "graphql": null
+          },
+          "auth": null,
+          "options": {
+            "timeout": null,
+            "followRedirects": null,
+            "useCookies": null,
+            "ignoreSslErrors": null,
+            "proxy": null
+          },
+          "variables": {}
+        }
+      ]
+    },
+    {
+      "schemaVersion": "1.0",
+      "id": "7d9aad0ccca840b0b35eac93e4eb1c14",
+      "name": "New Collection 2",
+      "sourceType": "local",
+      "requestDirectory": "requests/collection-2",
+      "variables": {},
+      "requests": [
+        {
+          "schemaVersion": "1.0",
+          "id": "a42c54fb83d74198ba252f46202100d0",
+          "name": "New Collection 2 Request 1",
+          "method": "GET",
+          "url": "https://httpbin.org/get",
+          "pathParameters": [],
+          "query": [],
+          "headers": [],
+          "body": null,
+          "auth": null,
+          "options": {
+            "timeout": null,
+            "followRedirects": null,
+            "useCookies": null,
+            "ignoreSslErrors": null,
+            "proxy": null
+          },
+          "variables": {}
+        }
+      ]
+    }
+  ],
+  "specifications": [
+    {
+      "schemaVersion": "1.0",
+      "id": "bad18b18f1484373ad6e2507e7eecc27",
+      "name": "HTTPBin OpenAPI",
+      "sourceType": "localFile",
+      "format": "openApi",
+      "path": "specs/httpbin.openapi.json",
+      "normalizedPath": null,
+      "checksum": null,
+      "remote": null,
+      "git": null,
+      "variables": {},
+      "lastNormalizedAt": null
+    },
+    {
+      "schemaVersion": "1.0",
+      "id": "cb59d7174cec4c4aa69877369dd4e077",
+      "name": "HTTPBin Full OpenAPI",
+      "sourceType": "localFile",
+      "format": "openApi",
+      "path": "specs/httpbin-full.openapi.json",
+      "normalizedPath": null,
+      "checksum": null,
+      "remote": null,
+      "git": null,
+      "variables": {},
+      "lastNormalizedAt": null
+    },
+    {
+      "schemaVersion": "1.0",
+      "id": "b13c0c6fdcb941e0a214e62eb9d10a20",
+      "name": "HTTPBin HTTP File",
+      "sourceType": "localFile",
+      "format": "http",
+      "path": "imports/httpbin-standalone.http",
+      "normalizedPath": null,
+      "checksum": null,
+      "remote": null,
+      "git": null,
+      "variables": {},
+      "lastNormalizedAt": null
+    },
+    {
+      "schemaVersion": "1.0",
+      "id": "f490779ba5ee4a15add0e92c2730f93a",
+      "name": "Post JSON curl",
+      "sourceType": "localFile",
+      "format": "curl",
+      "path": "imports/post-json.curl",
+      "normalizedPath": null,
+      "checksum": null,
+      "remote": null,
+      "git": null,
+      "variables": {},
+      "lastNormalizedAt": null
+    },
+    {
+      "schemaVersion": "1.0",
+      "id": "e75f45d722e84e0da4c2ec821be948a2",
+      "name": "Remote OpenAPI Example",
+      "sourceType": "remoteEndpoint",
+      "format": "openApi",
+      "path": "specs/remote-openapi.json",
+      "normalizedPath": null,
+      "checksum": null,
+      "remote": {
+        "endpoint": "https://httpbin.org/spec.json",
+        "method": "GET",
+        "headers": [],
+        "lastRefreshedAt": null,
+        "eTag": null,
+        "checksum": null,
+        "updateAvailable": false
+      },
+      "git": null,
+      "variables": {},
+      "lastNormalizedAt": null
+    }
+  ],
+  "environments": [
+    {
+      "schemaVersion": "1.0",
+      "id": "efc4135678444872bb65d04544a25113",
+      "name": "dev",
+      "variables": {
+        "baseUrl": {
+          "value": "https://httpbin.org",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        },
+        "keyword": {
+          "value": "readable-http",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        },
+        "apiKey": {
+          "value": "sample-api-key",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        }
+      }
+    },
+    {
+      "schemaVersion": "1.0",
+      "id": "f3f2d351e9ff4e29a757c24662f4bb0d",
+      "name": "httpbin",
+      "variables": {
+        "baseUrl": {
+          "value": "https://httpbin.org",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        },
+        "basicUser": {
+          "value": "demo",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        },
+        "basicPassword": {
+          "value": "secret",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        },
+        "bearerToken": {
+          "value": "sample-token",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        },
+        "apiKey": {
+          "value": "sample-api-key",
+          "type": "string",
+          "source": "fixed",
+          "enabled": true
+        }
+      }
+    }
+  ]
+}
