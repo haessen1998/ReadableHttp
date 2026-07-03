@@ -5,6 +5,7 @@ public enum ReadableStreamFormat
     Auto,
     ServerSentEvents,
     Lines,
+    JsonArray,
     Raw
 }
 

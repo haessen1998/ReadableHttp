@@ -201,24 +201,24 @@
     gap: 10px;
     width: 100%;
     border: 0;
-    background: rgba(255, 255, 255, 0.01);
+    background: color-mix(in srgb, var(--panel) 86%, transparent);
     color: var(--text);
     padding: 8px 10px;
     text-align: left;
 }
 
 .endpoint-summary:hover {
-    background: rgba(255, 255, 255, 0.025);
+    background: var(--panel-2);
 }
 
 .endpoint-path {
-    color: #7dd3fc;
+    color: color-mix(in srgb, var(--accent) 78%, var(--text));
     font-family: Consolas, "Cascadia Mono", monospace;
     font-size: 11px;
 }
 
 .endpoint-name {
-    color: #5a6a87;
+    color: var(--muted);
     font-size: 10px;
 }
 
@@ -271,7 +271,7 @@
 }
 
 .spec-table th {
-    background: #080a0e;
+    background: var(--panel-2);
     color: var(--muted-2);
     font-family: Consolas, "Cascadia Mono", monospace;
     font-size: 9px;
@@ -279,11 +279,11 @@
 }
 
 .spec-table td {
-    color: #5a6a87;
+    color: var(--muted);
 }
 
 .spec-table td:first-child {
-    color: #7dd3fc;
+    color: color-mix(in srgb, var(--accent) 78%, var(--text));
     font-family: Consolas, "Cascadia Mono", monospace;
 }
 
@@ -325,7 +325,7 @@
     align-items: center;
     border: 1px solid var(--line);
     border-radius: 4px;
-    background: #080a0e;
+    background: var(--panel-2);
     padding: 8px 10px;
 }
 
@@ -345,7 +345,7 @@
 }
 
 .response-list span {
-    color: #5a6a87;
+    color: var(--muted);
     font-size: 10px;
 }
 

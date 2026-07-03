@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ReadableHttp;
 
 public sealed class ReadableRequest
@@ -25,6 +27,9 @@ public sealed class ReadableRequest
     public ReadableRequestOptions Options { get; set; } = new();
 
     public Dictionary<string, ReadableVariable> Variables { get; set; } = [];
+
+    [JsonIgnore]
+    public string? SourcePath { get; set; }
 }
 
 public sealed class ReadableRequestOptions

@@ -1,4 +1,5 @@
 using ReadableHttp;
+using ReadableHttp.AI;
 using ReadableHttp.Execution;
 using ReadableHttp.Storage;
 using ReadableHttp.Try;
@@ -9,26 +10,35 @@ namespace ReadableHttp.App.Maui.Components.ApiClient;
 
 public sealed class ApiClientWorkspaceState
 {
-    private const string LooseRequestsCollectionId = "__loose_requests__";
+    private const string DiscoveredCollectionIdPrefix = "__discovered_collection__:";
+    private const string UngroupedCollectionId = "__ungrouped_collection__";
+    private const string UngroupedCollectionDirectory = "collections";
+    private const string UngroupedCollectionName = "未归档";
     public const string ThemeSystem = "system";
     public const string ThemeLight = "light";
     public const string ThemeDark = "dark";
     public const string ProxyNone = "none";
     public const string ProxySystem = "system";
     public const string ProxyCustom = "custom";
+    public const string FontSmall = "small";
+    public const string FontMedium = "medium";
+    public const string FontLarge = "large";
 
     private readonly AppSettingsStore _settingsStore;
     private readonly AppFilePicker _filePicker;
+    private readonly IReadableHttpAiAgent _aiAgent;
     private readonly ReadableWorkspaceStore _workspaceStore = new();
     private bool _initialized;
 
-    public ApiClientWorkspaceState(AppSettingsStore settingsStore, AppFilePicker filePicker)
+    public ApiClientWorkspaceState(AppSettingsStore settingsStore, AppFilePicker filePicker, IReadableHttpAiAgent aiAgent)
     {
         _settingsStore = settingsStore;
         _filePicker = filePicker;
+        _aiAgent = aiAgent;
     }
 
     public event Action? Changed;
+    public event Func<Task>? ChangedAsync;
 
     public string WorkspacePath { get; set; } = string.Empty;
     public string WorkspaceStatus { get; private set; } = "No workspace loaded";
@@ -41,12 +51,22 @@ public sealed class ApiClientWorkspaceState
     public string Method { get => ActiveRequestTab?.Method ?? "GET"; set => SetMethod(value); }
     public string Url { get => ActiveRequestTab?.Url ?? string.Empty; set => SetUrl(value); }
     public string BodyText { get => ActiveRequestTab?.BodyText ?? string.Empty; set => SetBodyText(value); }
+    public string BodyType => ActiveRequestTab?.BodyType.ToString() ?? ReadableBodyType.None.ToString();
+    public string BodyContentType => ActiveRequestTab?.BodyContentType ?? string.Empty;
+    public IReadOnlyList<ReadableNameValue> RequestQuery => ActiveRequestTab?.Query ?? [];
+    public IReadOnlyList<ReadableNameValue> RequestHeaders => ActiveRequestTab?.Headers ?? [];
+    public IReadOnlyList<ReadableNameValue> RequestForm => ActiveRequestTab?.Form ?? [];
     public string StatusText => ActiveRequestTab?.StatusText ?? "Ready";
     public string ResponseText => ActiveRequestTab?.ResponseText ?? string.Empty;
     public string ResponseNodePath => ActiveRequestTab?.ResponseNodePath ?? "root";
     public string Language { get; set; } = "system";
     public string ThemeMode { get; private set; } = ThemeSystem;
     public bool DarkMode { get; set; }
+    public string FontSize { get; private set; } = FontMedium;
+    public string FontSizeClass => $"font-{FontSize}";
+    public bool UseChinese => Language.Equals("zh-CN", StringComparison.OrdinalIgnoreCase)
+        || (Language.Equals("system", StringComparison.OrdinalIgnoreCase)
+            && Thread.CurrentThread.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase));
     public string ProxyMode { get; private set; } = ProxySystem;
     public string CustomProxyUrl { get; private set; } = string.Empty;
     public string CustomProxyUsername { get; private set; } = string.Empty;
@@ -78,10 +98,34 @@ public sealed class ApiClientWorkspaceState
     public List<string> WorkspaceOptions { get; private set; } = [];
     public List<ActivityEntry> ActivityLog { get; private set; } = [new("Ready", "等待加载 workspace 或导入文件")];
     public List<AiChatMessage> AiMessages { get; private set; } = [new("assistant", "我可以根据当前 request、response 或 spec 帮你整理参数、生成测试用例和解释错误。")];
+    public List<ReadableAiAction> PendingAiActions { get; private set; } = [];
     public List<PipelinePhase> PipelinePhases => ActiveRequestTab?.PipelinePhases ?? [];
     public List<RequestWorkspaceTab> RequestTabs { get; private set; } = [];
     public string? ActiveRequestTabId { get; private set; }
+    public string? PendingCloseTabId { get; private set; }
     public AppSettingsDraft SettingsDraft { get; private set; } = new();
+    public string AboutDescription => ActiveRequestTab?.SourceKey switch
+    {
+        "collections" => T("collectionsAboutDescription"),
+        "specs" => T("specsAboutDescription"),
+        _ => string.Empty
+    };
+    public IReadOnlyList<KeyValuePair<string, string>> AboutStats => ActiveRequestTab?.SourceKey switch
+    {
+        "collections" =>
+        [
+            new(T("collections"), Collections.Count.ToString()),
+            new(T("requests"), Collections.Sum(collection => collection.Requests.Count).ToString()),
+            new(T("workspace"), WorkspaceName)
+        ],
+        "specs" =>
+        [
+            new(T("specifications"), VisibleSpecificationCount.ToString()),
+            new(T("remoteEndpoint"), Specifications.Count(specification => specification.SourceType == ReadableSpecificationSourceType.RemoteEndpoint).ToString()),
+            new(T("localFile"), Specifications.Count(specification => specification.SourceType != ReadableSpecificationSourceType.RemoteEndpoint).ToString())
+        ],
+        _ => []
+    };
 
     public bool IsGitWorkspace => Workspace?.Type == ReadableWorkspaceType.Git;
 
@@ -95,11 +139,36 @@ public sealed class ApiClientWorkspaceState
 
     public string WorkspaceTypeLabel => Workspace?.Type.ToString() ?? ReadableWorkspaceType.Local.ToString();
 
+    public IReadOnlyList<KeyValuePair<string, ReadableVariable>> WorkspaceVariables => Workspace?.Variables.ToList() ?? [];
+
+    public IReadOnlyList<KeyValuePair<string, ReadableVariable>> CollectionVariables => SelectedCollection?.Variables.ToList() ?? [];
+
     public string SpecificationName => SelectedSpecification?.Name ?? string.Empty;
 
     public string SpecificationEndpoint => SelectedSpecification?.Remote?.Endpoint ?? string.Empty;
 
     public string SpecificationPath => SelectedSpecification?.Path ?? string.Empty;
+
+    public string SpecificationCachePath => SelectedSpecification?.NormalizedPath ?? string.Empty;
+
+    public string SpecificationCacheStatus
+    {
+        get
+        {
+            if (SelectedSpecification is null || string.IsNullOrWhiteSpace(SelectedSpecification.NormalizedPath))
+            {
+                return "Not cached";
+            }
+
+            return File.Exists(ResolveWorkspacePath(SelectedSpecification.NormalizedPath))
+                ? "Cached"
+                : "Missing";
+        }
+    }
+
+    public string SpecificationLastRefreshedLabel => SelectedSpecification?.Remote?.LastRefreshedAt is { } refreshedAt
+        ? refreshedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        : "Never";
 
     public string SpecificationSourceLabel => SelectedSpecification?.SourceType.ToString() ?? string.Empty;
 
@@ -162,10 +231,12 @@ public sealed class ApiClientWorkspaceState
             ? TryFilePath
             : settings.TryFilePath;
         Language = settings.Language;
+        FontSize = NormalizeFontSize(settings.FontSize);
         ThemeMode = NormalizeThemeMode(string.IsNullOrWhiteSpace(settings.ThemeMode)
             ? settings.DarkMode ? ThemeDark : ThemeSystem
             : settings.ThemeMode);
         DarkMode = ThemeMode == ThemeDark;
+        ApplyApplicationTheme();
         ProxyMode = NormalizeProxyMode(settings.ProxyMode);
         CustomProxyUrl = settings.CustomProxyUrl;
         CustomProxyUsername = settings.CustomProxyUsername;
@@ -245,15 +316,154 @@ public sealed class ApiClientWorkspaceState
         tab.IsDirty = true;
         if (SelectedRequest is not null && tab.Origin == RequestTabOrigin.Collection)
         {
-            SelectedRequest.Body = string.IsNullOrWhiteSpace(value)
-                ? null
-                : new ReadableBody
-                {
-                    Type = ReadableBodyType.Json,
-                    ContentType = "application/json",
-                    Content = value
-                };
+            SelectedRequest.Body = BuildBodyFromTab(tab);
         }
+        NotifyChanged();
+    }
+
+    public void SetBodyType(string value)
+    {
+        var tab = EnsureActiveRequestTab();
+        tab.BodyType = Enum.TryParse<ReadableBodyType>(value, ignoreCase: true, out var type)
+            ? type
+            : ReadableBodyType.None;
+        tab.BodyContentType = DefaultContentType(tab.BodyType);
+        tab.IsDirty = true;
+        if (SelectedRequest is not null && tab.Origin == RequestTabOrigin.Collection)
+        {
+            SelectedRequest.Body = BuildBodyFromTab(tab);
+        }
+        NotifyChanged();
+    }
+
+    public void SetBodyContentType(string value)
+    {
+        var tab = EnsureActiveRequestTab();
+        tab.BodyContentType = value.Trim();
+        tab.IsDirty = true;
+        if (SelectedRequest is not null && tab.Origin == RequestTabOrigin.Collection)
+        {
+            SelectedRequest.Body = BuildBodyFromTab(tab);
+        }
+        NotifyChanged();
+    }
+
+    public void FormatBody()
+    {
+        var tab = EnsureActiveRequestTab();
+        if (string.IsNullOrWhiteSpace(tab.BodyText))
+        {
+            return;
+        }
+
+        try
+        {
+            var formatted = FormatBodyText(tab.BodyText, tab.BodyType, tab.BodyContentType);
+
+            if (!string.Equals(formatted, tab.BodyText, StringComparison.Ordinal))
+            {
+                tab.BodyText = formatted;
+                tab.IsDirty = true;
+                SyncSelectedRequestFromTab(tab);
+                AddActivity("Body", "已格式化请求 body");
+                NotifyChanged();
+            }
+        }
+        catch (Exception exception) when (exception is JsonException or System.Xml.XmlException)
+        {
+            AddActivity("Body", $"格式化失败: {exception.Message}");
+            NotifyChanged();
+        }
+    }
+
+    private static string FormatBodyText(string text, ReadableBodyType bodyType, string? contentType)
+    {
+        if (bodyType == ReadableBodyType.Json || ShouldTreatAsJson(text, contentType))
+        {
+            return FormatJsonElement(JsonDocument.Parse(text).RootElement);
+        }
+
+        if (bodyType == ReadableBodyType.Xml || ShouldTreatAsXml(text, contentType))
+        {
+            return System.Xml.Linq.XDocument.Parse(text).ToString();
+        }
+
+        return text;
+    }
+
+    private static bool ShouldTreatAsJson(string text, string? contentType)
+    {
+        if (!string.IsNullOrWhiteSpace(contentType)
+            && contentType.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var trimmed = text.TrimStart();
+        return trimmed.StartsWith('{') || trimmed.StartsWith('[');
+    }
+
+    private static bool ShouldTreatAsXml(string text, string? contentType)
+    {
+        if (!string.IsNullOrWhiteSpace(contentType)
+            && (contentType.Contains("xml", StringComparison.OrdinalIgnoreCase)
+                || contentType.Contains("html", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return text.TrimStart().StartsWith('<');
+    }
+
+    public void AddNameValue(string kind)
+    {
+        var tab = EnsureActiveRequestTab();
+        GetNameValueList(tab, kind).Add(new ReadableNameValue { Enabled = true });
+        tab.IsDirty = true;
+        SyncSelectedRequestFromTab(tab);
+        NotifyChanged();
+    }
+
+    public void RemoveNameValue(EditableNameValueChange change)
+    {
+        var tab = EnsureActiveRequestTab();
+        var list = GetNameValueList(tab, change.Kind);
+        if (change.Index < 0 || change.Index >= list.Count)
+        {
+            return;
+        }
+
+        list.RemoveAt(change.Index);
+        tab.IsDirty = true;
+        SyncSelectedRequestFromTab(tab);
+        NotifyChanged();
+    }
+
+    public void SetNameValue(EditableNameValueChange change)
+    {
+        var tab = EnsureActiveRequestTab();
+        var list = GetNameValueList(tab, change.Kind);
+        if (change.Index < 0 || change.Index >= list.Count)
+        {
+            return;
+        }
+
+        var item = list[change.Index];
+        switch (change.Field)
+        {
+            case "enabled":
+                item.Enabled = bool.TryParse(change.Value, out var enabled) && enabled;
+                break;
+            case "name":
+                item.Name = change.Value ?? string.Empty;
+                break;
+            case "value":
+                item.Value = change.Value;
+                break;
+        }
+
+        tab.IsDirty = true;
+        SyncSelectedRequestFromTab(tab);
         NotifyChanged();
     }
 
@@ -291,7 +501,31 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        SelectedCollection.Name = string.IsNullOrWhiteSpace(value) ? "Collection" : value.Trim();
+        var oldDirectory = GetCollectionDirectory(SelectedCollection);
+        var name = string.IsNullOrWhiteSpace(value) ? "Collection" : value.Trim();
+        SelectedCollection.Name = name;
+        if (ShouldRenameCollectionDirectory(SelectedCollection))
+        {
+            var newRelativeDirectory = $"collections/{ToFileName(name)}";
+            var newDirectory = Path.Combine(WorkspacePath, newRelativeDirectory);
+            if (!string.Equals(NormalizePath(oldDirectory), NormalizePath(newDirectory), StringComparison.OrdinalIgnoreCase))
+            {
+                if (Directory.Exists(oldDirectory) && !Directory.Exists(newDirectory))
+                {
+                    Directory.Move(oldDirectory, newDirectory);
+                }
+
+                if (!Directory.Exists(oldDirectory) || Directory.Exists(newDirectory))
+                {
+                    SelectedCollection.RequestDirectory = newRelativeDirectory;
+                    if (SelectedCollection.Id.StartsWith(DiscoveredCollectionIdPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        SelectedCollection.Id = $"{DiscoveredCollectionIdPrefix}{newRelativeDirectory}";
+                    }
+                }
+            }
+        }
+
         if (ActiveRequestTab?.Origin == RequestTabOrigin.CollectionConfig)
         {
             ActiveRequestTab.Title = SelectedCollection.Name;
@@ -307,6 +541,67 @@ public sealed class ApiClientWorkspaceState
         }
 
         SelectedCollection.RequestDirectory = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        NotifyChanged();
+    }
+
+    public void AddVariable(string scope)
+    {
+        var variables = GetVariableDictionary(scope);
+        if (variables is null)
+        {
+            return;
+        }
+
+        var name = NextVariableName(variables, "variable");
+        variables[name] = string.Empty;
+        NotifyChanged();
+    }
+
+    public void RemoveVariable(VariableChange change)
+    {
+        var variables = GetVariableDictionary(change.Scope);
+        var entry = GetVariableEntry(variables, change.Index);
+        if (variables is null || entry is null)
+        {
+            return;
+        }
+
+        variables.Remove(entry.Value.Key);
+        NotifyChanged();
+    }
+
+    public void SetVariable(VariableChange change)
+    {
+        var variables = GetVariableDictionary(change.Scope);
+        var entry = GetVariableEntry(variables, change.Index);
+        if (variables is null || entry is null)
+        {
+            return;
+        }
+
+        var key = entry.Value.Key;
+        var variable = entry.Value.Value;
+        switch (change.Field)
+        {
+            case "enabled":
+                variable.Enabled = bool.TryParse(change.Value, out var enabled) && enabled;
+                break;
+            case "name":
+                var nextKey = string.IsNullOrWhiteSpace(change.Value) ? key : change.Value.Trim();
+                if (!string.Equals(key, nextKey, StringComparison.Ordinal)
+                    && !variables.ContainsKey(nextKey))
+                {
+                    variables.Remove(key);
+                    variables[nextKey] = variable;
+                }
+                break;
+            case "value":
+                variable.Value = change.Value is null ? null : System.Text.Json.Nodes.JsonValue.Create(change.Value);
+                variable.Type = ReadableVariableType.String;
+                variable.Source = ReadableVariableSource.Fixed;
+                break;
+        }
+
         NotifyChanged();
     }
 
@@ -329,7 +624,7 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        SelectedSpecification.Name = string.IsNullOrWhiteSpace(value) ? "Specification" : value.Trim();
+        SelectedSpecification.Name = string.IsNullOrWhiteSpace(value) ? "Document" : value.Trim();
         if (ActiveRequestTab?.Origin == RequestTabOrigin.SpecificationConfig)
         {
             ActiveRequestTab.Title = SelectedSpecification.Name;
@@ -364,6 +659,226 @@ public sealed class ApiClientWorkspaceState
 
     public void SetDraftLanguage(string value) => UpdateSettingsDraft(SettingsDraft with { Language = string.IsNullOrWhiteSpace(value) ? "system" : value });
 
+    public void SetDraftFontSize(string value) => UpdateSettingsDraft(SettingsDraft with { FontSize = NormalizeFontSize(value) });
+
+    public string T(string key)
+    {
+        if (!UseChinese)
+        {
+            return key switch
+            {
+                "settings" => "Settings",
+                "global" => "Global",
+                "preferences" => "Preferences",
+                "theme" => "Theme",
+                "language" => "Language",
+                "fontSize" => "Font size",
+                "system" => "System",
+                "light" => "Light",
+                "dark" => "Dark",
+                "small" => "Small",
+                "medium" => "Medium",
+                "large" => "Large",
+                "proxy" => "Proxy",
+                "noProxy" => "No proxy",
+                "systemProxy" => "System proxy",
+                "customProxy" => "Custom proxy",
+                "send" => "Send",
+                "close" => "Close",
+                "save" => "Save",
+                "closeOthers" => "Close Others",
+                "closeAll" => "Close All",
+                "discard" => "Discard",
+                "cancel" => "Cancel",
+                "unsaved" => "Unsaved changes",
+                "docs" => "Documentation",
+                "parameters" => "Parameters",
+                "hidePanel" => "Hide panel",
+                "operations" => "Operations",
+                "importSpecHint" => "Import a spec to view operations.",
+                "askRequest" => "Ask about this request...",
+                "workspaces" => "Workspaces",
+                "noWorkspace" => "No workspace",
+                "search" => "Search",
+                "clearSearch" => "Clear search",
+                "newWorkspace" => "New workspace",
+                "localWorkspace" => "Local workspace",
+                "remoteWorkspace" => "Remote workspace",
+                "removeUnavailable" => "Remove unavailable workspace",
+                "more" => "More",
+                "configure" => "Configure",
+                "openInExplorer" => "Open in explorer",
+                "removeFromList" => "Remove from list",
+                "deleteWorkspaceFolder" => "Delete folder",
+                "confirmDeleteWorkspace" => "Confirm delete folder",
+                "collections" => "Collections",
+                "newCollection" => "New collection",
+                "reloadCollections" => "Reload collections",
+                "newRequest" => "New request",
+                "duplicate" => "Duplicate",
+                "delete" => "Delete",
+                "noMatchingRequests" => "No matching requests",
+                "open" => "Open",
+                "openDefault" => "Open default",
+                "moveTo" => "Move to",
+                "specifications" => "Specs",
+                "newSpecification" => "New spec",
+                "localFile" => "Local file",
+                "remoteEndpoint" => "Remote endpoint",
+                "reloadSpecifications" => "Reload specs",
+                "addSpecHint" => "Add a local or remote spec.",
+                "refreshRemoteDocument" => "Refresh remote document",
+                "switchWorkspace" => "Switch workspace",
+                "unavailable" => "Unavailable",
+                "hideSidebar" => "Hide sidebar",
+                "gitWorkspace" => "Git workspace",
+                "noMatchingCollections" => "No matching collections.",
+                "createOrLoadCollection" => "Create or load a collection.",
+                "workspaceUnavailableHint" => "Workspace unavailable",
+                "requestLower" => "request",
+                "requestsLower" => "requests",
+                "local" => "Local",
+                "workspace" => "Workspace",
+                "collection" => "Collection",
+                "specification" => "Spec",
+                "scope" => "Scope",
+                "name" => "Name",
+                "type" => "Type",
+                "path" => "Path",
+                "environment" => "Environment",
+                "saveWorkspace" => "Save Workspace",
+                "requestDirectory" => "Request directory",
+                "source" => "Source",
+                "requests" => "Requests",
+                "saveCollection" => "Save Collection",
+                "document" => "Document",
+                "lastRefresh" => "Last refresh",
+                "cachedDocument" => "Cached document",
+                "saveSpecification" => "Save Spec",
+                "format" => "Format",
+                "about" => "About",
+                "sort" => "Sort",
+                "sortByName" => "Name",
+                "sortBySize" => "Size",
+                "sortByUpdated" => "Updated time",
+                "collectionsAboutDescription" => "Collections are local request assets stored in the workspace. They can carry scoped environment variables and request files.",
+                "specsAboutDescription" => "Specs are API documents such as OpenAPI, Swagger, HTTP, curl, or remote documents. They are normalized for preview and request generation.",
+                "refresh" => "Refresh",
+                "method" => "Method",
+                "activity" => "Activity",
+                "empty" => "Empty",
+                "chars" => "chars",
+                _ => key
+            };
+        }
+
+        return key switch
+        {
+            "settings" => "设置",
+            "global" => "全局",
+            "preferences" => "偏好",
+            "theme" => "主题",
+            "language" => "语言",
+            "fontSize" => "字体大小",
+            "system" => "跟随系统",
+            "light" => "亮色",
+            "dark" => "暗色",
+            "small" => "小",
+            "medium" => "中",
+            "large" => "大",
+            "proxy" => "代理",
+            "noProxy" => "无代理",
+            "systemProxy" => "系统代理",
+            "customProxy" => "自定义代理",
+            "send" => "发送",
+            "close" => "关闭",
+            "save" => "保存",
+            "closeOthers" => "关闭其他",
+            "closeAll" => "全部关闭",
+            "discard" => "不保存",
+            "cancel" => "取消",
+            "unsaved" => "有未保存的修改",
+            "docs" => "文档",
+            "parameters" => "参数",
+            "hidePanel" => "隐藏面板",
+            "operations" => "接口",
+            "importSpecHint" => "导入文档后查看接口。",
+            "askRequest" => "询问当前请求...",
+            "workspaces" => "工作区",
+            "noWorkspace" => "未加载工作区",
+            "search" => "搜索",
+            "clearSearch" => "清除搜索",
+            "newWorkspace" => "新增工作区",
+            "localWorkspace" => "本地工作区",
+            "remoteWorkspace" => "远程工作区",
+            "removeUnavailable" => "移除不可用工作区",
+            "more" => "更多",
+            "configure" => "配置",
+            "openInExplorer" => "在文件管理器中打开",
+            "removeFromList" => "从列表移除",
+            "deleteWorkspaceFolder" => "删除文件夹",
+            "confirmDeleteWorkspace" => "确认删除文件夹",
+            "collections" => "集合",
+            "newCollection" => "新增集合",
+            "reloadCollections" => "重新加载集合",
+            "newRequest" => "新增请求",
+            "duplicate" => "复制",
+            "delete" => "删除",
+            "noMatchingRequests" => "没有匹配的请求",
+            "open" => "打开",
+            "openDefault" => "默认打开",
+            "moveTo" => "移动到",
+            "specifications" => "文档",
+            "newSpecification" => "新增文档",
+            "localFile" => "本地文件",
+            "remoteEndpoint" => "远程端点",
+            "reloadSpecifications" => "重新加载文档",
+            "addSpecHint" => "添加本地或远程文档。",
+            "refreshRemoteDocument" => "刷新远程文档",
+            "switchWorkspace" => "快速切换工作区",
+            "unavailable" => "不可用",
+            "hideSidebar" => "隐藏左栏",
+            "gitWorkspace" => "Git 工作区",
+            "noMatchingCollections" => "没有匹配的集合。",
+            "createOrLoadCollection" => "创建或加载集合。",
+            "workspaceUnavailableHint" => "工作区不可用",
+            "requestLower" => "个请求",
+            "requestsLower" => "个请求",
+            "local" => "本地",
+            "workspace" => "工作区",
+            "collection" => "集合",
+            "specification" => "文档",
+            "scope" => "范围",
+            "name" => "名称",
+            "type" => "类型",
+            "path" => "路径",
+            "environment" => "环境变量",
+            "saveWorkspace" => "保存工作区",
+            "requestDirectory" => "请求目录",
+            "source" => "来源",
+            "requests" => "请求",
+            "saveCollection" => "保存集合",
+            "document" => "文档",
+            "lastRefresh" => "最近刷新",
+            "cachedDocument" => "缓存文档",
+            "saveSpecification" => "保存文档",
+            "format" => "格式化",
+            "about" => "关于",
+            "sort" => "排序",
+            "sortByName" => "名称",
+            "sortBySize" => "大小",
+            "sortByUpdated" => "更新时间",
+            "collectionsAboutDescription" => "集合是工作区里的本地请求资产，可以承载分层环境变量和请求文件。",
+            "specsAboutDescription" => "文档用于承载 OpenAPI、Swagger、HTTP、curl 或远程文档，会转换为可预览和生成请求的中间态。",
+            "refresh" => "刷新",
+            "method" => "方法",
+            "activity" => "活动",
+            "empty" => "空",
+            "chars" => "字符",
+            _ => key
+        };
+    }
+
     public void SetAiDraft(string value)
     {
         AiDraft = value;
@@ -389,10 +904,16 @@ public sealed class ApiClientWorkspaceState
             }
 
             Directory.CreateDirectory(WorkspacePath);
+            EnsureWorkspaceLayout(WorkspacePath);
             Workspace = new ReadableWorkspace
             {
-                Name = Path.GetFileName(WorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                Name = Path.GetFileName(WorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                Type = IsGitRepository(WorkspacePath) ? ReadableWorkspaceType.Git : ReadableWorkspaceType.Local
             };
+            if (Workspace.Type == ReadableWorkspaceType.Git)
+            {
+                Workspace.Git = new ReadableGitOptions();
+            }
             Collections = Workspace.Collections;
             SelectedCollection = null;
             SelectedRequest = null;
@@ -423,6 +944,7 @@ public sealed class ApiClientWorkspaceState
 
             WorkspacePath = path;
             Directory.CreateDirectory(WorkspacePath);
+            EnsureWorkspaceLayout(WorkspacePath);
             Workspace = new ReadableWorkspace
             {
                 Name = Path.GetFileName(WorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
@@ -462,12 +984,21 @@ public sealed class ApiClientWorkspaceState
         {
             AddWorkspaceOption(WorkspacePath);
             Workspace = await _workspaceStore.LoadWorkspaceAsync(WorkspacePath);
+            EnsureWorkspaceLayout(WorkspacePath);
+            var workspaceTypeChanged = ApplyGitWorkspaceType(WorkspacePath, Workspace);
             Collections = Workspace.Collections.ToList();
-            await AddLooseRequestsCollectionAsync();
+            await AddDiscoveredCollectionsAsync();
+            await LoadAllCollectionRequestsAsync();
+            AddDiscoveredSpecifications();
             SelectedCollection = null;
             SelectedRequest = null;
             WorkspaceStatus = $"Loaded: {Workspace.Name}";
             AddActivity("Workspace", WorkspaceStatus);
+            if (workspaceTypeChanged)
+            {
+                await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+            }
+
             SaveSettings();
             NotifyChanged();
         }
@@ -531,16 +1062,57 @@ public sealed class ApiClientWorkspaceState
         var path = await _filePicker.PickTryFileAsync();
         if (!string.IsNullOrWhiteSpace(path))
         {
-            TryFilePath = path;
-            AddSpecFile(path);
-            AddLocalSpecification(path);
+            var storedPath = await CopySpecificationIntoWorkspaceAsync(path);
+            TryFilePath = ResolveWorkspacePath(storedPath);
+            AddSpecFile(TryFilePath);
+            AddLocalSpecification(storedPath);
             ActiveSource = "API Spec";
-            DocumentTitle = Path.GetFileName(path);
+            DocumentTitle = Path.GetFileName(storedPath);
             ViewMode = "preview";
             SaveSettings();
             await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
             NotifyChanged();
         }
+    }
+
+    public async Task PasteImportAsync()
+    {
+        var text = await Microsoft.Maui.ApplicationModel.DataTransfer.Clipboard.Default.GetTextAsync();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            AddActivity("Import", "剪贴板没有可导入的文本");
+            NotifyChanged();
+            return;
+        }
+
+        var fileName = $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}{GuessClipboardImportExtension(text)}";
+        string importPath;
+        if (Workspace is not null)
+        {
+            EnsureWorkspaceLayout(WorkspacePath);
+            var targetDirectory = Path.Combine(WorkspacePath, "specs");
+            Directory.CreateDirectory(targetDirectory);
+            importPath = NextAvailablePath(targetDirectory, fileName);
+            await File.WriteAllTextAsync(importPath, text);
+
+            var storedPath = Path.GetRelativePath(WorkspacePath, importPath).Replace('\\', '/');
+            TryFilePath = importPath;
+            AddSpecFile(TryFilePath);
+            AddLocalSpecification(storedPath);
+            await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+        }
+        else
+        {
+            var targetDirectory = Path.Combine(Microsoft.Maui.Storage.FileSystem.Current.CacheDirectory, "ReadableHttp", "clipboard-imports");
+            Directory.CreateDirectory(targetDirectory);
+            importPath = NextAvailablePath(targetDirectory, fileName);
+            await File.WriteAllTextAsync(importPath, text);
+            TryFilePath = importPath;
+            AddSpecFile(TryFilePath);
+        }
+
+        AddActivity("Import", $"已粘贴导入 {Path.GetFileName(importPath)}");
+        await LoadTryDocumentAsync();
     }
 
     public async Task NewRemoteSpecificationAsync()
@@ -555,7 +1127,7 @@ public sealed class ApiClientWorkspaceState
 
         var specification = new ReadableSpecification
         {
-            Name = NextSpecificationName("Remote Specification"),
+            Name = NextSpecificationName("Remote Document"),
             SourceType = ReadableSpecificationSourceType.RemoteEndpoint,
             Format = ReadableSpecificationFormat.OpenApi,
             Remote = new ReadableRemoteSpecificationOptions(),
@@ -565,7 +1137,7 @@ public sealed class ApiClientWorkspaceState
         SelectedSpecification = specification;
         await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
         OpenSpecificationConfigTab(specification);
-        AddActivity("Spec", "已创建远程 specification，请填写 Endpoint");
+        AddActivity("Spec", "已创建远程文档，请填写 Endpoint");
         NotifyChanged();
     }
 
@@ -602,6 +1174,18 @@ public sealed class ApiClientWorkspaceState
     public void ToggleRecentSection()
     {
         ShowRecentSection = !ShowRecentSection;
+        NotifyChanged();
+    }
+
+    public void OpenCollectionsAbout()
+    {
+        OpenAboutTab("collections", T("collections"));
+        NotifyChanged();
+    }
+
+    public void OpenSpecsAbout()
+    {
+        OpenAboutTab("specs", T("specifications"));
         NotifyChanged();
     }
 
@@ -690,6 +1274,8 @@ public sealed class ApiClientWorkspaceState
 
         ThemeMode = NormalizeThemeMode(SettingsDraft.ThemeMode);
         DarkMode = ThemeMode == ThemeDark;
+        ApplyApplicationTheme();
+        FontSize = NormalizeFontSize(SettingsDraft.FontSize);
         ProxyMode = draftProxyMode;
         CustomProxyUrl = SettingsDraft.CustomProxyUrl.Trim();
         CustomProxyUsername = SettingsDraft.CustomProxyUsername.Trim();
@@ -713,42 +1299,38 @@ public sealed class ApiClientWorkspaceState
     {
         IsSending = true;
         var tab = EnsureActiveRequestTab();
+        var startedAt = DateTimeOffset.UtcNow;
         tab.StatusText = "Sending...";
         tab.ResponseText = string.Empty;
         tab.ResponseNodePath = "root";
-        tab.PipelinePhases = [];
-        NotifyChanged();
+        tab.PipelinePhases = CreateStreamingPipelinePhases(startedAt, "Sending");
+        await NotifyChangedAsync();
 
         try
         {
-            var request = new ReadableRequest
+            var request = BuildRequestFromTab(tab);
+            await foreach (var message in new ReadableHttpExecutor().StreamAsync(request, CreateExecutionContext()))
             {
-                Method = tab.Method,
-                Url = tab.Url,
-                Body = string.IsNullOrWhiteSpace(tab.BodyText)
-                    ? null
-                    : new ReadableBody
-                    {
-                        Type = ReadableBodyType.Json,
-                        ContentType = "application/json",
-                        Content = tab.BodyText
-                    }
-            };
+                ApplyStreamMessage(tab, message);
+                tab.PipelinePhases = CreateStreamingPipelinePhases(startedAt, message.Type.ToString());
+                await NotifyChangedAsync();
+                await Task.Yield();
+            }
 
-            var exchange = await new ReadableHttpExecutor().SendExchangeAsync(request, CreateExecutionContext());
-            tab.StatusText = exchange.Error is not null
-                ? $"ERROR {exchange.Error.Type}"
-                : $"HTTP {exchange.Response?.StatusCode} {exchange.Response?.ReasonPhrase}";
-            tab.ResponseText = exchange.Error?.Message
-                ?? exchange.Response?.BodyText
-                ?? "<binary or empty response>";
-            tab.PipelinePhases = CreatePipelinePhases(exchange.Timings);
+            AddActivity(tab.Method, $"{tab.StatusText} {tab.Url}");
+            await SaveActiveRequestAfterSendAsync(tab);
+        }
+        catch (Exception exception) when (IsSendFailure(exception))
+        {
+            tab.StatusText = $"ERROR {exception.GetType().Name}";
+            tab.ResponseText = FormatSendFailure(exception);
             AddActivity(tab.Method, $"{tab.StatusText} {tab.Url}");
         }
         finally
         {
             IsSending = false;
-            NotifyChanged();
+            tab.PipelinePhases = CreateStreamingPipelinePhases(startedAt, "Completed");
+            await NotifyChangedAsync();
         }
     }
 
@@ -774,7 +1356,7 @@ public sealed class ApiClientWorkspaceState
         {
             Name = $"New Collection {Collections.Count + 1}",
             SourceType = ReadableCollectionSourceType.Local,
-            RequestDirectory = $"requests/collection-{Collections.Count + 1}"
+            RequestDirectory = $"collections/collection-{Collections.Count + 1}"
         };
         Collections.Add(collection);
         Workspace.Collections = Collections;
@@ -838,6 +1420,11 @@ public sealed class ApiClientWorkspaceState
                 return;
             }
 
+            if (await OpenCachedSpecificationDocumentAsync(specification))
+            {
+                return;
+            }
+
             await RefreshSpecificationAsync(specification);
             return;
         }
@@ -872,14 +1459,7 @@ public sealed class ApiClientWorkspaceState
         try
         {
             var document = await new ReadableSpecificationRefresher().RefreshAsync(WorkspacePath, specification);
-            SelectedSpecification = specification;
-            Operations = document.Operations;
-            RawContent = document.RawContent;
-            DocumentTitle = document.Title ?? specification.Name;
-            ActiveSource = specification.SourceType.ToString();
-            ViewMode = "preview";
-            TryFilePath = ResolveWorkspacePath(specification.NormalizedPath ?? specification.Path ?? string.Empty);
-            OpenSpecificationDocumentTab(DocumentTitle, TryFilePath);
+            ApplySpecificationDocument(specification, document, ResolveWorkspacePath(specification.NormalizedPath ?? specification.Path ?? string.Empty));
             await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
             AddActivity("Spec", specification.Remote?.UpdateAvailable == true
                 ? $"已刷新 {specification.Name}，发现变更"
@@ -896,6 +1476,15 @@ public sealed class ApiClientWorkspaceState
 
     public async Task RefreshSpecificationAsync(SpecificationEventArgs args) => await RefreshSpecificationAsync(args.Specification);
 
+    public void OpenSpecificationConfig(ReadableSpecification specification)
+    {
+        SelectedSpecification = specification;
+        OpenSpecificationConfigTab(specification);
+        NotifyChanged();
+    }
+
+    public void OpenSpecificationConfigAsync(SpecificationEventArgs args) => OpenSpecificationConfig(args.Specification);
+
     public async Task RefreshSelectedSpecificationAsync()
     {
         if (SelectedSpecification is null)
@@ -906,6 +1495,36 @@ public sealed class ApiClientWorkspaceState
         }
 
         await RefreshSpecificationAsync(SelectedSpecification);
+    }
+
+    private async Task<bool> OpenCachedSpecificationDocumentAsync(ReadableSpecification specification)
+    {
+        if (string.IsNullOrWhiteSpace(specification.NormalizedPath))
+        {
+            return false;
+        }
+
+        var cachePath = ResolveWorkspacePath(specification.NormalizedPath);
+        if (!File.Exists(cachePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var document = await new ReadableHttpJsonStorage().LoadAsync<ReadableTryDocument>(cachePath);
+            ApplySpecificationDocument(specification, document, cachePath);
+            AddActivity("Spec", $"已打开缓存 {specification.Name}");
+            NotifyChanged();
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException)
+        {
+            OpenSpecificationConfigTab(specification);
+            AddActivity("Spec", $"缓存读取失败：{exception.Message}");
+            NotifyChanged();
+            return true;
+        }
     }
 
     public async Task DuplicateSpecificationAsync(ReadableSpecification specification)
@@ -935,6 +1554,7 @@ public sealed class ApiClientWorkspaceState
         }
 
         Workspace.Specifications.RemoveAll(item => string.Equals(item.Id, specification.Id, StringComparison.Ordinal));
+        DeleteSpecificationFiles(specification);
         await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
         RequestTabs.RemoveAll(tab =>
             tab.Origin == RequestTabOrigin.SpecificationDocument
@@ -998,7 +1618,7 @@ public sealed class ApiClientWorkspaceState
 
     public void OpenWorkspaceInExplorer(string path)
     {
-        OpenPathInShell(path);
+        ExplorePathInShell(path);
     }
 
     public void OpenWorkspaceInExplorer(WorkspaceSelectedEventArgs args) => OpenWorkspaceInExplorer(args.Path);
@@ -1034,6 +1654,43 @@ public sealed class ApiClientWorkspaceState
 
     public void RemoveWorkspaceOption(WorkspaceSelectedEventArgs args) => RemoveWorkspaceOption(args.Path);
 
+    public Task DeleteWorkspaceFolderAsync(WorkspaceSelectedEventArgs args) => DeleteWorkspaceFolderAsync(args.Path);
+
+    public Task DeleteWorkspaceFolderAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        {
+            RemoveWorkspaceOption(path);
+            return Task.CompletedTask;
+        }
+
+        var workspaceFile = Path.Combine(path, "workspace.json");
+        if (!File.Exists(workspaceFile))
+        {
+            WorkspaceStatus = "拒绝删除：目标不是有效 workspace";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+            RemoveWorkspaceOption(path);
+            WorkspaceStatus = $"Deleted workspace folder: {Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))}";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            WorkspaceStatus = $"Delete failed: {exception.Message}";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
     public async Task SaveWorkspaceAsync()
     {
         if (Workspace is null)
@@ -1044,12 +1701,8 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        Workspace.Collections = Collections.Where(collection => !IsLooseRequestsCollection(collection)).ToList();
+        Workspace.Collections = Collections.ToList();
         await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
-        foreach (var collection in Collections)
-        {
-            await _workspaceStore.SaveCollectionRequestsAsync(WorkspacePath, collection, collection.Requests, replaceExisting: true);
-        }
 
         WorkspaceStatus = $"Saved: {Workspace.Name}";
         AddActivity("Workspace", WorkspaceStatus);
@@ -1097,7 +1750,7 @@ public sealed class ApiClientWorkspaceState
 
         var request = SelectedRequest;
         SelectedCollection.Requests.Remove(request);
-        await _workspaceStore.SaveCollectionRequestsAsync(WorkspacePath, SelectedCollection, SelectedCollection.Requests, replaceExisting: true);
+        await _workspaceStore.DeleteRequestAsync(WorkspacePath, SelectedCollection, request);
         CloseTabsForRequest(request.Id);
         SelectedRequest = SelectedCollection.Requests.FirstOrDefault();
         if (SelectedRequest is not null)
@@ -1125,7 +1778,7 @@ public sealed class ApiClientWorkspaceState
         {
             Name = NextCollectionName($"{collection.Name} Copy"),
             SourceType = collection.SourceType,
-            RequestDirectory = $"requests/{ToFileName(collection.Name)}-copy-{Collections.Count + 1}",
+            RequestDirectory = $"collections/{ToFileName(collection.Name)}-copy-{Collections.Count + 1}",
             Requests = collection.Requests.Select(CloneRequest).ToList()
         };
         Collections.Add(clone);
@@ -1142,7 +1795,7 @@ public sealed class ApiClientWorkspaceState
 
     public async Task DeleteCollectionAsync(ReadableCollection collection)
     {
-        if (Workspace is null || IsLooseRequestsCollection(collection))
+        if (Workspace is null)
         {
             return;
         }
@@ -1176,7 +1829,7 @@ public sealed class ApiClientWorkspaceState
         var clone = CloneRequest(request);
         clone.Name = NextRequestName(collection, $"{request.Name} Copy");
         collection.Requests.Add(clone);
-        await _workspaceStore.SaveCollectionRequestsAsync(WorkspacePath, collection, collection.Requests, replaceExisting: true);
+        await _workspaceStore.SaveRequestAsync(WorkspacePath, collection, clone);
         SelectedCollection = collection;
         SelectedRequest = clone;
         OpenCollectionRequestTab(collection, clone);
@@ -1186,11 +1839,40 @@ public sealed class ApiClientWorkspaceState
 
     public async Task DuplicateRequestAsync(RequestEventArgs args) => await DuplicateRequestAsync(args.Collection, args.Request);
 
+    public async Task MoveRequestAsync(RequestMoveEventArgs args)
+    {
+        if (ReferenceEquals(args.SourceCollection, args.TargetCollection)
+            || string.Equals(args.SourceCollection.Id, args.TargetCollection.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await LoadCollectionRequestsAsync(args.SourceCollection);
+        await LoadCollectionRequestsAsync(args.TargetCollection);
+        var request = args.SourceCollection.Requests.FirstOrDefault(item =>
+            string.Equals(item.Id, args.Request.Id, StringComparison.OrdinalIgnoreCase));
+        if (request is null)
+        {
+            return;
+        }
+
+        args.SourceCollection.Requests.Remove(request);
+        request.Name = NextRequestName(args.TargetCollection, request.Name);
+        await _workspaceStore.MoveRequestAsync(WorkspacePath, args.SourceCollection, args.TargetCollection, request);
+        args.TargetCollection.Requests.Add(request);
+        CloseTabsForRequest(request.Id);
+        SelectedCollection = args.TargetCollection;
+        SelectedRequest = request;
+        OpenCollectionRequestTab(args.TargetCollection, request);
+        AddActivity("Request", $"已移动到 {args.TargetCollection.Name}");
+        NotifyChanged();
+    }
+
     public async Task DeleteRequestAsync(ReadableCollection collection, ReadableRequest request)
     {
         await LoadCollectionRequestsAsync(collection);
         collection.Requests.RemoveAll(item => string.Equals(item.Id, request.Id, StringComparison.OrdinalIgnoreCase));
-        await _workspaceStore.SaveCollectionRequestsAsync(WorkspacePath, collection, collection.Requests, replaceExisting: true);
+        await _workspaceStore.DeleteRequestAsync(WorkspacePath, collection, request);
         CloseTabsForRequest(request.Id);
         if (SelectedRequest is not null && string.Equals(SelectedRequest.Id, request.Id, StringComparison.OrdinalIgnoreCase))
         {
@@ -1204,24 +1886,21 @@ public sealed class ApiClientWorkspaceState
 
     public void OpenCollectionInExplorer(ReadableCollection collection)
     {
-        OpenPathInShell(GetCollectionDirectory(collection));
+        ExplorePathInShell(GetCollectionDirectory(collection));
     }
 
     public void OpenCollectionInExplorer(CollectionEventArgs args) => OpenCollectionInExplorer(args.Collection);
 
     public void OpenRequestDefault(ReadableCollection collection, ReadableRequest request)
     {
-        OpenPathInShell(Path.Combine(GetCollectionDirectory(collection), $"{ToFileName(request.Name)}.json"));
+        OpenPathDefault(GetRequestPath(collection, request));
     }
 
     public void OpenRequestDefault(RequestEventArgs args) => OpenRequestDefault(args.Collection, args.Request);
 
     public void OpenSpecificationInExplorer(ReadableSpecification specification)
     {
-        if (!string.IsNullOrWhiteSpace(specification.Path))
-        {
-            OpenPathInShell(ResolveWorkspacePath(specification.Path));
-        }
+        ExplorePathInShell(Path.Combine(WorkspacePath, "specs"));
     }
 
     public void OpenSpecificationInExplorer(SpecificationEventArgs args) => OpenSpecificationInExplorer(args.Specification);
@@ -1250,10 +1929,83 @@ public sealed class ApiClientWorkspaceState
 
     public void CloseRequestTab(string tabId)
     {
+        var tab = RequestTabs.FirstOrDefault(item => item.Id == tabId);
+        if (tab?.IsDirty == true)
+        {
+            PendingCloseTabId = tabId;
+            NotifyChanged();
+            return;
+        }
+
+        ForceCloseRequestTab(tabId);
+    }
+
+    public void ConfirmCloseRequestTab(string tabId)
+    {
+        PendingCloseTabId = null;
+        ForceCloseRequestTab(tabId);
+    }
+
+    public void CancelCloseRequestTab()
+    {
+        PendingCloseTabId = null;
+        NotifyChanged();
+    }
+
+    public async Task SaveRequestTabAsync(string tabId)
+    {
+        await SelectRequestTab(tabId);
+        await SaveActiveRequestAsync();
+    }
+
+    public void CloseOtherRequestTabs(string tabId)
+    {
+        var dirtyTab = RequestTabs.FirstOrDefault(tab => tab.Id != tabId && tab.IsDirty);
+        if (dirtyTab is not null)
+        {
+            PendingCloseTabId = dirtyTab.Id;
+            NotifyChanged();
+            return;
+        }
+
+        RequestTabs.RemoveAll(tab => tab.Id != tabId);
+        ActiveRequestTabId = RequestTabs.FirstOrDefault()?.Id;
+        if (ActiveRequestTab is not null)
+        {
+            ActivateTab(ActiveRequestTab);
+            SyncSelectionFromTab(ActiveRequestTab);
+        }
+
+        NotifyChanged();
+    }
+
+    public void CloseAllRequestTabs()
+    {
+        var dirtyTab = RequestTabs.FirstOrDefault(tab => tab.IsDirty);
+        if (dirtyTab is not null)
+        {
+            PendingCloseTabId = dirtyTab.Id;
+            NotifyChanged();
+            return;
+        }
+
+        RequestTabs.Clear();
+        ActiveRequestTabId = null;
+        SelectedRequest = null;
+        NotifyChanged();
+    }
+
+    private void ForceCloseRequestTab(string tabId)
+    {
         var index = RequestTabs.FindIndex(tab => tab.Id == tabId);
         if (index < 0)
         {
             return;
+        }
+
+        if (string.Equals(PendingCloseTabId, tabId, StringComparison.Ordinal))
+        {
+            PendingCloseTabId = null;
         }
 
         var wasActive = string.Equals(ActiveRequestTabId, tabId, StringComparison.Ordinal);
@@ -1295,7 +2047,7 @@ public sealed class ApiClientWorkspaceState
         }
 
         ApplyTabToRequest(tab, request);
-        await _workspaceStore.SaveCollectionRequestsAsync(WorkspacePath, collection, collection.Requests, replaceExisting: true);
+        await _workspaceStore.SaveRequestAsync(WorkspacePath, collection, request);
         tab.RequestId = request.Id;
         tab.SourceKey = GetRequestSourceKey(collection, request);
         tab.IsDirty = false;
@@ -1316,18 +2068,7 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        var collection = SelectedCollection ?? Collections.FirstOrDefault();
-        if (collection is null)
-        {
-            collection = new ReadableCollection
-            {
-                Name = "Saved Requests",
-                SourceType = ReadableCollectionSourceType.Local,
-                RequestDirectory = "requests/saved"
-            };
-            Collections.Add(collection);
-            Workspace.Collections = Collections;
-        }
+        var collection = GetOrCreateUngroupedCollection();
 
         await LoadCollectionRequestsAsync(collection);
         var request = new ReadableRequest
@@ -1337,7 +2078,7 @@ public sealed class ApiClientWorkspaceState
         ApplyTabToRequest(tab, request);
         collection.Requests.Add(request);
         await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
-        await _workspaceStore.SaveCollectionRequestsAsync(WorkspacePath, collection, collection.Requests, replaceExisting: true);
+        await _workspaceStore.SaveRequestAsync(WorkspacePath, collection, request);
 
         tab.Origin = RequestTabOrigin.Collection;
         tab.CollectionId = collection.Id;
@@ -1389,13 +2130,31 @@ public sealed class ApiClientWorkspaceState
 
     public void SelectResponseNode(string path)
     {
-        EnsureActiveRequestTab().ResponseNodePath = string.IsNullOrWhiteSpace(path) ? "root" : path;
+        var tab = EnsureActiveRequestTab();
+        if (string.IsNullOrWhiteSpace(path) || path == "root")
+        {
+            tab.ResponseNodePath = "root";
+        }
+        else if (path.StartsWith("/", StringComparison.Ordinal))
+        {
+            tab.ResponseNodePath = path[1..];
+            if (string.IsNullOrWhiteSpace(tab.ResponseNodePath))
+            {
+                tab.ResponseNodePath = "root";
+            }
+        }
+        else
+        {
+            tab.ResponseNodePath = tab.ResponseNodePath == "root"
+                ? path
+                : $"{tab.ResponseNodePath}.{path}";
+        }
         NotifyChanged();
     }
 
     public void SelectResponseNode(ResponseNodeSelectedEventArgs args) => SelectResponseNode(args.Path);
 
-    public void SendAiMessage()
+    public async Task SendAiMessage()
     {
         var prompt = AiDraft.Trim();
         if (string.IsNullOrWhiteSpace(prompt))
@@ -1404,25 +2163,160 @@ public sealed class ApiClientWorkspaceState
         }
 
         AiMessages.Add(new AiChatMessage("user", prompt));
-        AiMessages.Add(new AiChatMessage("assistant", BuildLocalAiReply(prompt)));
         AiDraft = string.Empty;
-        AddActivity("AI", "已根据当前请求生成本地建议");
+        NotifyChanged();
+
+        try
+        {
+            var result = await _aiAgent.SendAsync(new ReadableAiTurnRequest
+            {
+                Prompt = prompt,
+                Context = BuildAiContext(),
+                Messages = AiMessages
+                    .Select(message => new ReadableHttp.AI.ReadableAiChatMessage
+                    {
+                        Role = message.Role,
+                        Content = message.Content
+                    })
+                    .ToList()
+            });
+
+            AiMessages.Add(new AiChatMessage("assistant", result.AssistantMessage));
+            PendingAiActions = result.Actions
+                .Where(action => action.Confirmation.RequiresConfirmation)
+                .ToList();
+            AddActivity("AI", PendingAiActions.Count == 0
+                ? "已完成只读分析"
+                : $"生成 {PendingAiActions.Count} 个待确认操作");
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or HttpRequestException)
+        {
+            AiMessages.Add(new AiChatMessage("assistant", $"AI 调用失败：{exception.Message}"));
+            AddActivity("AI", "调用失败");
+        }
+
         NotifyChanged();
     }
 
-    private string BuildLocalAiReply(string prompt)
+    public void ApplyAiAction(string actionId)
     {
-        if (ResponseText.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase) || StatusText.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+        var action = PendingAiActions.FirstOrDefault(item => string.Equals(item.Id, actionId, StringComparison.Ordinal));
+        if (action is null)
         {
-            return $"当前请求失败：{StatusText}。建议先检查 URL、代理、证书和环境变量。你刚才问：{prompt}";
+            return;
         }
 
-        if (Operations.Count > 0 && ViewMode == "preview")
+        if (action.Kind == ReadableAiActionKind.UpdateCurrentRequest && action.RequestPatch is not null)
         {
-            return $"当前 spec 有 {Operations.Count} 个 operation。可以选择一个 operation 打开到 Request，再根据参数和响应生成测试用例。";
+            ApplyAiRequestPatch(action.RequestPatch);
+            AiMessages.Add(new AiChatMessage("assistant", $"已应用：{action.Title}"));
+            AddActivity("AI", $"已应用 {action.Title}");
         }
 
-        return $"当前请求是 {Method} {Url}。我可以继续帮你整理 headers、body schema、环境变量或错误排查步骤。";
+        PendingAiActions.Remove(action);
+        NotifyChanged();
+    }
+
+    public void DismissAiAction(string actionId)
+    {
+        PendingAiActions.RemoveAll(action => string.Equals(action.Id, actionId, StringComparison.Ordinal));
+        NotifyChanged();
+    }
+
+    private ReadableAiWorkspaceContext BuildAiContext()
+    {
+        return new ReadableAiWorkspaceContext
+        {
+            WorkspaceName = WorkspaceName,
+            WorkspacePath = WorkspacePath,
+            CurrentRequest = ActiveRequestTab is null ? null : BuildRequestFromTab(ActiveRequestTab),
+            CurrentExchange = BuildCurrentExchangeSnapshot(),
+            RecentExchanges = BuildCurrentExchangeSnapshot() is { } exchange ? [exchange] : [],
+            Collections = Collections,
+            Specifications = Specifications,
+            ViewMode = ViewMode
+        };
+    }
+
+    private ReadableExchange? BuildCurrentExchangeSnapshot()
+    {
+        if (ActiveRequestTab is null || string.IsNullOrWhiteSpace(ActiveRequestTab.ResponseText))
+        {
+            return null;
+        }
+
+        return new ReadableExchange
+        {
+            Request = BuildRequestFromTab(ActiveRequestTab),
+            Response = new ReadableResponse
+            {
+                BodyText = ActiveRequestTab.ResponseText
+            }
+        };
+    }
+
+    private void ApplyAiRequestPatch(ReadableAiRequestPatch patch)
+    {
+        var tab = EnsureActiveRequestTab();
+        if (!string.IsNullOrWhiteSpace(patch.Method))
+        {
+            tab.Method = patch.Method.Trim().ToUpperInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(patch.Url))
+        {
+            tab.Url = patch.Url.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(patch.BodyType)
+            && Enum.TryParse<ReadableBodyType>(patch.BodyType, ignoreCase: true, out var bodyType))
+        {
+            tab.BodyType = bodyType;
+        }
+
+        if (patch.BodyText is not null)
+        {
+            tab.BodyText = patch.BodyText;
+        }
+
+        if (patch.BodyContentType is not null)
+        {
+            tab.BodyContentType = patch.BodyContentType;
+        }
+
+        ApplyAiParameterChanges(tab.Query, patch.QueryChanges);
+        ApplyAiParameterChanges(tab.Headers, patch.HeaderChanges);
+        ApplyAiParameterChanges(tab.Form, patch.FormChanges);
+        tab.IsDirty = true;
+        SyncSelectedRequestFromTab(tab);
+    }
+
+    private static void ApplyAiParameterChanges(List<ReadableNameValue> target, IReadOnlyList<ReadableAiParameterChange> changes)
+    {
+        foreach (var change in changes)
+        {
+            if (string.IsNullOrWhiteSpace(change.Name))
+            {
+                continue;
+            }
+
+            var existing = target.FirstOrDefault(item => item.Name.Equals(change.Name, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                target.Add(new ReadableNameValue
+                {
+                    Name = change.Name,
+                    Value = change.SuggestedValue,
+                    Enabled = true,
+                    Description = change.Reason
+                });
+                continue;
+            }
+
+            existing.Value = change.SuggestedValue;
+            existing.Enabled = true;
+            existing.Description = change.Reason;
+        }
     }
 
     private async Task LoadCollectionRequestsAsync(ReadableCollection collection)
@@ -1432,29 +2326,116 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        var requests = IsLooseRequestsCollection(collection)
-            ? await _workspaceStore.LoadLooseRequestsAsync(WorkspacePath)
-            : await _workspaceStore.LoadCollectionRequestsAsync(WorkspacePath, collection);
+        var requests = await _workspaceStore.LoadCollectionRequestsAsync(WorkspacePath, collection);
         collection.Requests = requests.ToList();
     }
 
-    private async Task AddLooseRequestsCollectionAsync()
+    private async Task LoadAllCollectionRequestsAsync()
     {
-        var looseRequests = await _workspaceStore.LoadLooseRequestsAsync(WorkspacePath);
-        if (looseRequests.Count == 0)
+        foreach (var collection in Collections)
+        {
+            await LoadCollectionRequestsAsync(collection);
+        }
+    }
+
+    private async Task AddDiscoveredCollectionsAsync()
+    {
+        var knownDirectories = Collections
+            .Select(collection => NormalizePath(GetCollectionDirectory(collection)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var directory in DiscoverCollectionRequestDirectories())
+        {
+            if (knownDirectories.Contains(NormalizePath(directory))
+                || !Directory.EnumerateFiles(directory, "*.json", SearchOption.AllDirectories).Any())
+            {
+                continue;
+            }
+
+            var relativeDirectory = Path.GetRelativePath(WorkspacePath, directory).Replace('\\', '/');
+            var collection = new ReadableCollection
+            {
+                Id = string.Equals(relativeDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase)
+                    ? UngroupedCollectionId
+                    : $"{DiscoveredCollectionIdPrefix}{relativeDirectory}",
+                Name = string.Equals(relativeDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase)
+                    ? UngroupedCollectionName
+                    : Path.GetFileName(directory),
+                SourceType = ReadableCollectionSourceType.Local,
+                RequestDirectory = relativeDirectory
+            };
+            collection.Requests = (await _workspaceStore.LoadCollectionRequestsAsync(WorkspacePath, collection)).ToList();
+            Collections.Add(collection);
+            knownDirectories.Add(NormalizePath(directory));
+        }
+    }
+
+    private IEnumerable<string> DiscoverCollectionRequestDirectories()
+    {
+        var collectionsDirectory = Path.Combine(WorkspacePath, "collections");
+        if (!Directory.Exists(collectionsDirectory))
+        {
+            yield break;
+        }
+
+        if (Directory.EnumerateFiles(collectionsDirectory, "*.json", SearchOption.TopDirectoryOnly).Any())
+        {
+            yield return collectionsDirectory;
+        }
+
+        foreach (var collectionDirectory in Directory.EnumerateDirectories(collectionsDirectory))
+        {
+            if (Directory.EnumerateFiles(collectionDirectory, "*.json", SearchOption.AllDirectories).Any())
+            {
+                yield return collectionDirectory;
+            }
+        }
+    }
+
+    private void AddDiscoveredSpecifications()
+    {
+        if (Workspace is null)
         {
             return;
         }
 
-        Collections.RemoveAll(IsLooseRequestsCollection);
-        Collections.Insert(0, new ReadableCollection
+        foreach (var directoryName in new[] { "specs" })
         {
-            Id = LooseRequestsCollectionId,
-            Name = "Loose Requests",
-            SourceType = ReadableCollectionSourceType.Local,
-            RequestDirectory = "requests",
-            Requests = looseRequests.ToList()
-        });
+            var directory = Path.Combine(WorkspacePath, directoryName);
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories))
+            {
+                var format = GuessSpecificationFormat(file);
+                if (format == ReadableSpecificationFormat.Unknown || IsGeneratedSpecificationCache(file))
+                {
+                    continue;
+                }
+
+                var relativePath = Path.GetRelativePath(WorkspacePath, file).Replace('\\', '/');
+                if (Workspace.Specifications.Any(specification => SpecificationPathMatches(specification, relativePath)))
+                {
+                    continue;
+                }
+
+                Workspace.Specifications.Add(new ReadableSpecification
+                {
+                    Name = Path.GetFileNameWithoutExtension(file),
+                    SourceType = ReadableSpecificationSourceType.LocalFile,
+                    Format = format,
+                    Path = relativePath
+                });
+            }
+        }
+    }
+
+    private static bool IsGeneratedSpecificationCache(string file)
+    {
+        return file.Contains($"{Path.DirectorySeparatorChar}.readablehttp{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+            || file.EndsWith(".trydoc.json", StringComparison.OrdinalIgnoreCase);
     }
 
     private RequestWorkspaceTab EnsureActiveRequestTab()
@@ -1574,7 +2555,7 @@ public sealed class ApiClientWorkspaceState
             return existing;
         }
 
-        var tab = CreateTabFromRequest(operation.Request, RequestTabOrigin.Specification, "Specification");
+        var tab = CreateTabFromRequest(operation.Request, RequestTabOrigin.Specification, "Spec");
         tab.Title = operation.Name;
         tab.SourceKey = key;
         RequestTabs.Add(tab);
@@ -1600,7 +2581,7 @@ public sealed class ApiClientWorkspaceState
             Title = title,
             Origin = RequestTabOrigin.SpecificationDocument,
             SourceKey = key,
-            ActiveSource = "Specification"
+            ActiveSource = "Spec"
         };
         RequestTabs.Add(tab);
         ActivateTab(tab);
@@ -1626,7 +2607,7 @@ public sealed class ApiClientWorkspaceState
             Title = specification.Name,
             Origin = RequestTabOrigin.SpecificationConfig,
             SourceKey = specification.Id,
-            ActiveSource = "Specification"
+            ActiveSource = "Spec"
         };
         RequestTabs.Add(tab);
         ActivateTab(tab);
@@ -1653,6 +2634,42 @@ public sealed class ApiClientWorkspaceState
         return tab;
     }
 
+    private RequestWorkspaceTab OpenAboutTab(string key, string title)
+    {
+        var existing = RequestTabs.FirstOrDefault(tab =>
+            tab.Origin == RequestTabOrigin.About
+            && string.Equals(tab.SourceKey, key, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            existing.Title = title;
+            ActivateTab(existing);
+            return existing;
+        }
+
+        var tab = new RequestWorkspaceTab
+        {
+            Title = title,
+            Origin = RequestTabOrigin.About,
+            SourceKey = key,
+            ActiveSource = "About"
+        };
+        RequestTabs.Add(tab);
+        ActivateTab(tab);
+        return tab;
+    }
+
+    private void ApplySpecificationDocument(ReadableSpecification specification, ReadableTryDocument document, string path)
+    {
+        SelectedSpecification = specification;
+        Operations = document.Operations;
+        RawContent = document.RawContent;
+        DocumentTitle = document.Title ?? specification.Name;
+        ActiveSource = specification.SourceType.ToString();
+        ViewMode = "preview";
+        TryFilePath = path;
+        OpenSpecificationDocumentTab(DocumentTitle, TryFilePath);
+    }
+
     private static RequestWorkspaceTab CreateTabFromRequest(ReadableRequest request, RequestTabOrigin origin, string activeSource)
     {
         return new RequestWorkspaceTab
@@ -1662,7 +2679,14 @@ public sealed class ApiClientWorkspaceState
             ActiveSource = activeSource,
             Method = request.Method,
             Url = request.Url,
-            BodyText = request.Body?.Content ?? string.Empty
+            BodyText = request.Body?.Content ?? string.Empty,
+            BodyType = request.Body?.Type ?? ReadableBodyType.None,
+            BodyContentType = request.Body?.ContentType ?? DefaultContentType(request.Body?.Type ?? ReadableBodyType.None),
+            Query = request.Query.Select(CloneNameValue).ToList(),
+            Headers = request.Headers.Select(CloneNameValue).ToList(),
+            Form = request.Body?.Type == ReadableBodyType.MultipartFormData
+                ? request.Body.Multipart.Select(CloneMultipartAsNameValue).ToList()
+                : request.Body?.Form.Select(CloneNameValue).ToList() ?? []
         };
     }
 
@@ -1713,17 +2737,207 @@ public sealed class ApiClientWorkspaceState
 
     private static void ApplyTabToRequest(RequestWorkspaceTab tab, ReadableRequest request)
     {
-        request.Name = tab.Title;
-        request.Method = tab.Method;
-        request.Url = tab.Url;
-        request.Body = string.IsNullOrWhiteSpace(tab.BodyText)
-            ? null
-            : new ReadableBody
-            {
-                Type = ReadableBodyType.Json,
-                ContentType = "application/json",
-                Content = tab.BodyText
-            };
+        var updated = BuildRequestFromTab(tab);
+        request.Name = updated.Name;
+        request.Method = updated.Method;
+        request.Url = updated.Url;
+        request.Query = updated.Query;
+        request.Headers = updated.Headers;
+        request.Body = updated.Body;
+    }
+
+    private static ReadableRequest BuildRequestFromTab(RequestWorkspaceTab tab)
+    {
+        return new ReadableRequest
+        {
+            Name = tab.Title,
+            Method = tab.Method,
+            Url = tab.Url,
+            Query = tab.Query.Select(CloneNameValue).ToList(),
+            Headers = tab.Headers.Select(CloneNameValue).ToList(),
+            Body = BuildBodyFromTab(tab)
+        };
+    }
+
+    private static void ApplyStreamMessage(RequestWorkspaceTab tab, ReadableStreamMessage message)
+    {
+        switch (message.Type)
+        {
+            case ReadableStreamMessageType.Headers:
+                tab.StatusText = $"HTTP {message.StatusCode} {message.ReasonPhrase}".TrimEnd();
+                break;
+            case ReadableStreamMessageType.Data:
+                AppendStreamText(tab, FormatStreamData(message), ShouldAppendStreamLine(message));
+                break;
+            case ReadableStreamMessageType.Error:
+                tab.StatusText = $"ERROR {message.Error?.Type}";
+                AppendStreamText(tab, message.Error?.Message ?? "Stream error", appendLine: true);
+                break;
+            case ReadableStreamMessageType.Completed:
+                if (string.IsNullOrWhiteSpace(tab.ResponseText))
+                {
+                    tab.ResponseText = "<empty response>";
+                }
+                break;
+        }
+    }
+
+    private static void AppendStreamText(RequestWorkspaceTab tab, string? value, bool appendLine)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        tab.ResponseText += value;
+        if (appendLine && !value.EndsWith(Environment.NewLine, StringComparison.Ordinal))
+        {
+            tab.ResponseText += Environment.NewLine;
+        }
+    }
+
+    private static string? FormatStreamData(ReadableStreamMessage message)
+    {
+        if (!string.IsNullOrEmpty(message.Data))
+        {
+            return message.Data;
+        }
+
+        return message.Raw;
+    }
+
+    private static bool ShouldAppendStreamLine(ReadableStreamMessage message)
+    {
+        if (string.IsNullOrEmpty(message.Data))
+        {
+            return false;
+        }
+
+        return !IsJsonStringStreamElement(message);
+    }
+
+    private static bool IsJsonStringStreamElement(ReadableStreamMessage message)
+    {
+        return message.Raw?.TrimStart().StartsWith('"') == true;
+    }
+
+    private static bool IsSendFailure(Exception exception)
+    {
+        return exception is HttpRequestException
+            or TaskCanceledException
+            or IOException
+            or UnauthorizedAccessException
+            or InvalidOperationException
+            or ArgumentException
+            or FormatException
+            or JsonException
+            or NotSupportedException;
+    }
+
+    private static string FormatSendFailure(Exception exception)
+    {
+        return $"""
+        Request failed before or during send.
+
+        Type: {exception.GetType().Name}
+        Message: {exception.Message}
+
+        Check URL, environment variables, headers, body content type, file paths, and proxy settings.
+        """;
+    }
+
+    private static ReadableBody? BuildBodyFromTab(RequestWorkspaceTab tab)
+    {
+        if (tab.BodyType == ReadableBodyType.None)
+        {
+            return null;
+        }
+
+        var body = new ReadableBody
+        {
+            Type = tab.BodyType,
+            ContentType = string.IsNullOrWhiteSpace(tab.BodyContentType)
+                ? DefaultContentType(tab.BodyType)
+                : tab.BodyContentType,
+            Content = tab.BodyText
+        };
+        if (tab.BodyType == ReadableBodyType.FormUrlEncoded)
+        {
+            body.Form = tab.Form.Select(CloneNameValue).ToList();
+            body.Content = null;
+        }
+        else if (tab.BodyType == ReadableBodyType.MultipartFormData)
+        {
+            body.Multipart = tab.Form
+                .Where(item => item.Enabled)
+                .Select(item => new ReadableMultipartItem
+                {
+                    Name = item.Name,
+                    Value = item.Value,
+                    Type = ReadableMultipartItemType.Text
+                })
+                .ToList();
+            body.Content = null;
+        }
+
+        return body;
+    }
+
+    private void SyncSelectedRequestFromTab(RequestWorkspaceTab tab)
+    {
+        if (SelectedRequest is not null && tab.Origin == RequestTabOrigin.Collection)
+        {
+            ApplyTabToRequest(tab, SelectedRequest);
+        }
+    }
+
+    private static List<ReadableNameValue> GetNameValueList(RequestWorkspaceTab tab, string kind)
+    {
+        return kind.ToLowerInvariant() switch
+        {
+            "headers" => tab.Headers,
+            "form" => tab.Form,
+            _ => tab.Query
+        };
+    }
+
+    private static ReadableNameValue CloneNameValue(ReadableNameValue item)
+    {
+        return new ReadableNameValue
+        {
+            Name = item.Name,
+            Value = item.Value,
+            Enabled = item.Enabled,
+            Description = item.Description
+        };
+    }
+
+    private static ReadableNameValue CloneMultipartAsNameValue(ReadableMultipartItem item)
+    {
+        return new ReadableNameValue
+        {
+            Name = item.Name,
+            Value = item.Type == ReadableMultipartItemType.File ? item.FilePath ?? item.FileName ?? string.Empty : item.Value ?? string.Empty,
+            Enabled = true,
+            Description = item.Type.ToString()
+        };
+    }
+
+    private static string DefaultContentType(ReadableBodyType type)
+    {
+        return type switch
+        {
+            ReadableBodyType.Json => "application/json",
+            ReadableBodyType.Xml => "application/xml",
+            ReadableBodyType.Html => "text/html",
+            ReadableBodyType.Javascript => "application/javascript",
+            ReadableBodyType.Graphql => "application/json",
+            ReadableBodyType.MultipartFormData => "multipart/form-data",
+            ReadableBodyType.BinaryFile => "application/octet-stream",
+            ReadableBodyType.FormUrlEncoded => "application/x-www-form-urlencoded",
+            ReadableBodyType.Raw => "text/plain",
+            _ => string.Empty
+        };
     }
 
     private static ReadableRequest CloneRequest(ReadableRequest request)
@@ -1732,6 +2946,63 @@ public sealed class ApiClientWorkspaceState
         var clone = JsonSerializer.Deserialize<ReadableRequest>(json, ReadableHttpJsonStorage.JsonOptions) ?? new ReadableRequest();
         clone.Id = Guid.NewGuid().ToString("N");
         return clone;
+    }
+
+    private async Task SaveActiveRequestAfterSendAsync(RequestWorkspaceTab tab)
+    {
+        if (Workspace is null)
+        {
+            tab.IsDirty = false;
+            return;
+        }
+
+        if (tab.Origin == RequestTabOrigin.Collection)
+        {
+            await SaveActiveRequestAsync();
+            return;
+        }
+
+        await SaveActiveRequestAsNewAsync();
+    }
+
+    private ReadableCollection GetOrCreateUngroupedCollection()
+    {
+        var collection = Collections.FirstOrDefault(item =>
+            string.Equals(item.Id, UngroupedCollectionId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(item.RequestDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase));
+        if (collection is not null)
+        {
+            return collection;
+        }
+
+        collection = new ReadableCollection
+        {
+            Id = UngroupedCollectionId,
+            Name = UngroupedCollectionName,
+            SourceType = ReadableCollectionSourceType.Local,
+            RequestDirectory = UngroupedCollectionDirectory
+        };
+        Collections.Insert(0, collection);
+        if (Workspace is not null)
+        {
+            Workspace.Collections = Collections;
+        }
+
+        return collection;
+    }
+
+    private static bool ShouldRenameCollectionDirectory(ReadableCollection collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection.RequestDirectory)
+            || string.Equals(collection.RequestDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var normalized = collection.RequestDirectory.Replace('\\', '/').TrimEnd('/');
+        return normalized.StartsWith("collections/", StringComparison.OrdinalIgnoreCase)
+            && !normalized.Contains("/requests/", StringComparison.OrdinalIgnoreCase)
+            && !normalized.EndsWith("/requests", StringComparison.OrdinalIgnoreCase);
     }
 
     private string NextCollectionName(string baseName)
@@ -1763,18 +3034,45 @@ public sealed class ApiClientWorkspaceState
     private string GetCollectionDirectory(ReadableCollection collection)
     {
         return string.IsNullOrWhiteSpace(collection.RequestDirectory)
-            ? Path.Combine(WorkspacePath, "requests", ToFileName(collection.Name))
+            ? Path.Combine(WorkspacePath, "collections", ToFileName(collection.Name))
             : Path.Combine(WorkspacePath, collection.RequestDirectory);
     }
 
     private string GetRequestSourceKey(ReadableCollection collection, ReadableRequest request)
     {
-        return Path.Combine(GetCollectionDirectory(collection), $"{ToFileName(request.Name)}.json");
+        return GetRequestPath(collection, request);
     }
 
-    private static void OpenPathInShell(string path)
+    private string GetRequestPath(ReadableCollection collection, ReadableRequest request)
+    {
+        return string.IsNullOrWhiteSpace(request.SourcePath)
+            ? Path.Combine(GetCollectionDirectory(collection), $"{ToFileName(request.Name)}.json")
+            : Path.Combine(WorkspacePath, request.SourcePath);
+    }
+
+    private static void ExplorePathInShell(string path)
     {
         var target = Directory.Exists(path) ? path : File.Exists(path) ? path : Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return;
+        }
+
+        var arguments = File.Exists(path)
+            ? $"/select,\"{Path.GetFullPath(path)}\""
+            : $"\"{Path.GetFullPath(target)}\"";
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = arguments,
+            UseShellExecute = true
+        });
+    }
+
+    private static void OpenPathDefault(string path)
+    {
+        var target = File.Exists(path) || Directory.Exists(path) ? path : Path.GetDirectoryName(path);
         if (string.IsNullOrWhiteSpace(target))
         {
             return;
@@ -1810,7 +3108,7 @@ public sealed class ApiClientWorkspaceState
 
     private ReadableExecutionContext CreateExecutionContext()
     {
-        return new ReadableExecutionContext
+        var context = new ReadableExecutionContext
         {
             Proxy = ProxyMode switch
             {
@@ -1825,6 +3123,32 @@ public sealed class ApiClientWorkspaceState
                 _ => new ReadableProxyOptions { Mode = ReadableProxyMode.System }
             }
         };
+        MergeVariables(context.Variables, Workspace?.Variables);
+        MergeVariables(context.Variables, SelectedCollection?.Variables);
+        if (ActiveRequestTab is { } tab)
+        {
+            var request = tab.Origin == RequestTabOrigin.Collection
+                ? SelectedRequest
+                : null;
+            MergeVariables(context.Variables, request?.Variables);
+        }
+
+        return context;
+    }
+
+    private static void MergeVariables(
+        Dictionary<string, ReadableVariable> target,
+        IReadOnlyDictionary<string, ReadableVariable>? source)
+    {
+        if (source is null)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in source)
+        {
+            target[key] = value;
+        }
     }
 
     private static bool ValidateWorkspacePath(string path, out string message)
@@ -1846,9 +3170,65 @@ public sealed class ApiClientWorkspaceState
         return true;
     }
 
-    private static bool IsLooseRequestsCollection(ReadableCollection collection)
+    private static void EnsureWorkspaceLayout(string workspacePath)
     {
-        return string.Equals(collection.Id, LooseRequestsCollectionId, StringComparison.Ordinal);
+        Directory.CreateDirectory(workspacePath);
+        Directory.CreateDirectory(Path.Combine(workspacePath, "collections"));
+        Directory.CreateDirectory(Path.Combine(workspacePath, "specs"));
+    }
+
+    private static bool IsGitRepository(string workspacePath)
+    {
+        return Directory.Exists(Path.Combine(workspacePath, ".git"));
+    }
+
+    private static bool ApplyGitWorkspaceType(string workspacePath, ReadableWorkspace workspace)
+    {
+        if (!IsGitRepository(workspacePath) || workspace.Type == ReadableWorkspaceType.Git)
+        {
+            return false;
+        }
+
+        workspace.Type = ReadableWorkspaceType.Git;
+        workspace.Git ??= new ReadableGitOptions();
+        return true;
+    }
+
+    private async Task<string> CopySpecificationIntoWorkspaceAsync(string sourcePath)
+    {
+        EnsureWorkspaceLayout(WorkspacePath);
+        var sourceFullPath = Path.GetFullPath(sourcePath);
+        var workspaceFullPath = Path.GetFullPath(WorkspacePath);
+        if (sourceFullPath.StartsWith(workspaceFullPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetRelativePath(WorkspacePath, sourceFullPath).Replace('\\', '/');
+        }
+
+        var targetDirectory = Path.Combine(WorkspacePath, "specs");
+        Directory.CreateDirectory(targetDirectory);
+        var targetPath = NextAvailablePath(targetDirectory, Path.GetFileName(sourcePath));
+        await using (var source = File.OpenRead(sourceFullPath))
+        await using (var target = File.Create(targetPath))
+        {
+            await source.CopyToAsync(target);
+        }
+
+        return Path.GetRelativePath(WorkspacePath, targetPath).Replace('\\', '/');
+    }
+
+    private static string NextAvailablePath(string directory, string fileName)
+    {
+        var name = Path.GetFileNameWithoutExtension(fileName);
+        var extension = Path.GetExtension(fileName);
+        var candidate = Path.Combine(directory, fileName);
+        var index = 2;
+        while (File.Exists(candidate))
+        {
+            candidate = Path.Combine(directory, $"{name}-{index}{extension}");
+            index++;
+        }
+
+        return candidate;
     }
 
     private void ResetSettingsDraft()
@@ -1860,6 +3240,7 @@ public sealed class ApiClientWorkspaceState
             CustomProxyUsername,
             CustomProxyPassword,
             Language,
+            FontSize,
             DevToolsEnabled);
     }
 
@@ -1877,6 +3258,7 @@ public sealed class ApiClientWorkspaceState
             TryFilePath = TryFilePath,
             WorkspaceHistory = string.Join('|', WorkspaceOptions),
             Language = Language,
+            FontSize = FontSize,
             ThemeMode = ThemeMode,
             DarkMode = DarkMode,
             ProxyMode = ProxyMode,
@@ -1898,6 +3280,21 @@ public sealed class ApiClientWorkspaceState
         };
     }
 
+    private void ApplyApplicationTheme()
+    {
+        if (Application.Current is null)
+        {
+            return;
+        }
+
+        Application.Current.UserAppTheme = ThemeMode switch
+        {
+            ThemeLight => AppTheme.Light,
+            ThemeDark => AppTheme.Dark,
+            _ => AppTheme.Unspecified
+        };
+    }
+
     private static string NormalizeProxyMode(string value)
     {
         return value switch
@@ -1908,12 +3305,81 @@ public sealed class ApiClientWorkspaceState
         };
     }
 
+    private static string NormalizeFontSize(string value)
+    {
+        return value switch
+        {
+            FontSmall => FontSmall,
+            FontLarge => FontLarge,
+            _ => FontMedium
+        };
+    }
+
     private void AddSpecFile(string path)
     {
         if (!string.IsNullOrWhiteSpace(path) && !SpecFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
         {
             SpecFiles.Insert(0, path);
         }
+    }
+
+    private Dictionary<string, ReadableVariable>? GetVariableDictionary(string scope)
+    {
+        return scope.Equals("collection", StringComparison.OrdinalIgnoreCase)
+            ? SelectedCollection?.Variables
+            : Workspace?.Variables;
+    }
+
+    private static KeyValuePair<string, ReadableVariable>? GetVariableEntry(
+        Dictionary<string, ReadableVariable>? variables,
+        int index)
+    {
+        if (variables is null || index < 0 || index >= variables.Count)
+        {
+            return null;
+        }
+
+        return variables.ElementAt(index);
+    }
+
+    private static string NextVariableName(Dictionary<string, ReadableVariable> variables, string baseName)
+    {
+        var name = baseName;
+        var index = 2;
+        while (variables.ContainsKey(name))
+        {
+            name = $"{baseName}{index}";
+            index++;
+        }
+
+        return name;
+    }
+
+    private void DeleteSpecificationFiles(ReadableSpecification specification)
+    {
+        DeleteWorkspaceFile(specification.Path);
+        if (!string.Equals(specification.Path, specification.NormalizedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            DeleteWorkspaceFile(specification.NormalizedPath);
+        }
+    }
+
+    private void DeleteWorkspaceFile(string? relativeOrAbsolutePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativeOrAbsolutePath))
+        {
+            return;
+        }
+
+        var path = ResolveWorkspacePath(relativeOrAbsolutePath);
+        var workspaceRoot = Path.GetFullPath(WorkspacePath);
+        var fullPath = Path.GetFullPath(path);
+        if (!fullPath.StartsWith(workspaceRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+        {
+            return;
+        }
+
+        File.Delete(fullPath);
     }
 
     private bool SpecificationPathMatches(ReadableSpecification specification, string path)
@@ -1968,6 +3434,12 @@ public sealed class ApiClientWorkspaceState
         return Path.IsPathRooted(path) ? path : Path.Combine(WorkspacePath, path);
     }
 
+    private static string NormalizePath(string path)
+    {
+        return Path.GetFullPath(path)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
     private static ReadableSpecificationFormat GuessSpecificationFormat(string path)
     {
         var extension = Path.GetExtension(path);
@@ -1979,6 +3451,49 @@ public sealed class ApiClientWorkspaceState
             ".json" or ".yaml" or ".yml" => ReadableSpecificationFormat.OpenApi,
             _ => ReadableSpecificationFormat.Unknown
         };
+    }
+
+    private static string GuessClipboardImportExtension(string text)
+    {
+        var trimmed = text.TrimStart();
+        if (trimmed.StartsWith("curl ", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("curl\t", StringComparison.OrdinalIgnoreCase))
+        {
+            return ".curl";
+        }
+
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+        {
+            return ".json";
+        }
+
+        var firstLine = trimmed.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        var firstToken = firstLine.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        if (IsHttpMethod(firstToken))
+        {
+            return ".http";
+        }
+
+        if (trimmed.StartsWith("openapi:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("swagger:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("\nopenapi:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("\nswagger:", StringComparison.OrdinalIgnoreCase))
+        {
+            return ".yaml";
+        }
+
+        return ".http";
+    }
+
+    private static bool IsHttpMethod(string value)
+    {
+        return value.Equals("GET", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("POST", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("PUT", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("PATCH", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("DELETE", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("HEAD", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase);
     }
 
     private void AddWorkspaceOption(string path)
@@ -2029,18 +3544,18 @@ public sealed class ApiClientWorkspaceState
         try
         {
             using var document = JsonDocument.Parse(ResponseText);
-            var root = document.RootElement;
-            if (root.ValueKind == JsonValueKind.Object)
+            var selected = ResolveResponseElement(document.RootElement, ResponseNodePath);
+            if (selected.ValueKind == JsonValueKind.Object)
             {
-                return root.EnumerateObject()
+                return selected.EnumerateObject()
                     .Select(property => property.Name)
                     .Take(24)
                     .ToList();
             }
 
-            if (root.ValueKind == JsonValueKind.Array)
+            if (selected.ValueKind == JsonValueKind.Array)
             {
-                return root.EnumerateArray()
+                return selected.EnumerateArray()
                     .Select((_, index) => $"[{index}]")
                     .Take(24)
                     .ToList();
@@ -2064,31 +3579,53 @@ public sealed class ApiClientWorkspaceState
         try
         {
             using var document = JsonDocument.Parse(ResponseText);
-            var root = document.RootElement;
-            if (root.ValueKind == JsonValueKind.Object
-                && root.TryGetProperty(ResponseNodePath, out var property))
-            {
-                return FormatJsonElement(property);
-            }
-
-            if (root.ValueKind == JsonValueKind.Array
-                && ResponseNodePath.StartsWith("[", StringComparison.Ordinal)
-                && ResponseNodePath.EndsWith("]", StringComparison.Ordinal)
-                && int.TryParse(ResponseNodePath[1..^1], out var index))
-            {
-                var items = root.EnumerateArray().ToList();
-                if (index >= 0 && index < items.Count)
-                {
-                    return FormatJsonElement(items[index]);
-                }
-            }
+            return FormatJsonElement(ResolveResponseElement(document.RootElement, ResponseNodePath));
         }
         catch (JsonException)
         {
             EnsureActiveRequestTab().ResponseNodePath = "root";
         }
+        catch (InvalidOperationException)
+        {
+            EnsureActiveRequestTab().ResponseNodePath = "root";
+        }
 
         return TryFormatJson(ResponseText);
+    }
+
+    private static JsonElement ResolveResponseElement(JsonElement root, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path == "root")
+        {
+            return root;
+        }
+
+        var current = root;
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current.ValueKind == JsonValueKind.Object && current.TryGetProperty(segment, out var property))
+            {
+                current = property;
+                continue;
+            }
+
+            if (current.ValueKind == JsonValueKind.Array
+                && segment.StartsWith("[", StringComparison.Ordinal)
+                && segment.EndsWith("]", StringComparison.Ordinal)
+                && int.TryParse(segment[1..^1], out var index))
+            {
+                var items = current.EnumerateArray().ToList();
+                if (index >= 0 && index < items.Count)
+                {
+                    current = items[index];
+                    continue;
+                }
+            }
+
+            return root;
+        }
+
+        return current;
     }
 
     private static string FirstLine(string value)
@@ -2147,8 +3684,45 @@ public sealed class ApiClientWorkspaceState
         }).ToList();
     }
 
+    private static List<PipelinePhase> CreateStreamingPipelinePhases(DateTimeOffset startedAt, string currentStage)
+    {
+        var elapsedMs = Math.Max(1, (int)Math.Round((DateTimeOffset.UtcNow - startedAt).TotalMilliseconds));
+        var phases = new List<PipelinePhase>
+        {
+            new("Build request", 14, "#22d3ee", "ready", 1)
+        };
+
+        var streamLabel = currentStage switch
+        {
+            nameof(ReadableStreamMessageType.Headers) => "Headers",
+            nameof(ReadableStreamMessageType.Data) => "Streaming",
+            nameof(ReadableStreamMessageType.Error) => "Error",
+            nameof(ReadableStreamMessageType.Completed) or "Completed" => "Complete",
+            _ => "Sending"
+        };
+
+        phases.Add(new(streamLabel, 72, streamLabel == "Error" ? "#ef4444" : "#3b82f6", $"{elapsedMs}ms", elapsedMs));
+        phases.Add(new(streamLabel == "Complete" ? "Rendered" : "UI update", 14, "#10b981", streamLabel == "Complete" ? "done" : "live", 1));
+        return phases;
+    }
+
     private void NotifyChanged()
     {
         Changed?.Invoke();
+    }
+
+    private async Task NotifyChangedAsync()
+    {
+        var handlers = ChangedAsync;
+        if (handlers is null)
+        {
+            NotifyChanged();
+            return;
+        }
+
+        foreach (Func<Task> handler in handlers.GetInvocationList().Cast<Func<Task>>())
+        {
+            await handler();
+        }
     }
 }

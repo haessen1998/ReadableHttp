@@ -184,6 +184,13 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
                     yield return message;
                 }
             }
+            else if (format == ReadableStreamFormat.JsonArray)
+            {
+                await foreach (var message in ReadJsonArrayAsync(stream, effectiveCancellationToken))
+                {
+                    yield return message;
+                }
+            }
             else
             {
                 await foreach (var message in ReadLinesAsync(stream, effectiveCancellationToken))
@@ -530,8 +537,12 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
             return ReadableStreamFormat.ServerSentEvents;
         }
 
-        if (mediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true
-            || mediaType?.StartsWith("text/", StringComparison.OrdinalIgnoreCase) == true)
+        if (mediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return ReadableStreamFormat.JsonArray;
+        }
+
+        if (mediaType?.StartsWith("text/", StringComparison.OrdinalIgnoreCase) == true)
         {
             return ReadableStreamFormat.Lines;
         }
@@ -582,6 +593,221 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
         }
     }
 
+    private static async IAsyncEnumerable<ReadableStreamMessage> ReadJsonArrayAsync(
+        Stream stream,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var buffer = new char[1024];
+        var element = new StringBuilder();
+        var arrayStarted = false;
+        var readingElement = false;
+        var inString = false;
+        var escaped = false;
+        var nestedDepth = 0;
+        var completed = false;
+
+        while (!completed)
+        {
+            var read = await reader.ReadAsync(buffer, cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            for (var index = 0; index < read; index++)
+            {
+                var current = buffer[index];
+                if (!arrayStarted)
+                {
+                    if (char.IsWhiteSpace(current))
+                    {
+                        continue;
+                    }
+
+                    if (current == '[')
+                    {
+                        arrayStarted = true;
+                        continue;
+                    }
+
+                    await foreach (var message in ReadRawFromPrefixAsync(
+                        new string(buffer, index, read - index),
+                        reader,
+                        cancellationToken))
+                    {
+                        yield return message;
+                    }
+
+                    yield break;
+                }
+
+                if (!readingElement)
+                {
+                    if (char.IsWhiteSpace(current) || current == ',')
+                    {
+                        continue;
+                    }
+
+                    if (current == ']')
+                    {
+                        completed = true;
+                        break;
+                    }
+
+                    readingElement = true;
+                    inString = current == '"';
+                    escaped = false;
+                    nestedDepth = current is '{' or '[' ? 1 : 0;
+                    element.Clear();
+                    element.Append(current);
+                    continue;
+                }
+
+                if (inString)
+                {
+                    element.Append(current);
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (current == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (current == '"')
+                    {
+                        inString = false;
+                    }
+
+                    continue;
+                }
+
+                if (current == '"')
+                {
+                    inString = true;
+                    element.Append(current);
+                    continue;
+                }
+
+                if (current is '{' or '[')
+                {
+                    nestedDepth++;
+                    element.Append(current);
+                    continue;
+                }
+
+                if (current is '}' or ']')
+                {
+                    if (nestedDepth > 0)
+                    {
+                        nestedDepth--;
+                        element.Append(current);
+                        continue;
+                    }
+
+                    foreach (var message in CompleteJsonArrayElement(element))
+                    {
+                        yield return message;
+                    }
+
+                    readingElement = false;
+                    completed = current == ']';
+                    if (completed)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (current == ',' && nestedDepth == 0)
+                {
+                    foreach (var message in CompleteJsonArrayElement(element))
+                    {
+                        yield return message;
+                    }
+
+                    readingElement = false;
+                    continue;
+                }
+
+                element.Append(current);
+            }
+        }
+
+        if (readingElement && element.Length > 0)
+        {
+            foreach (var message in CompleteJsonArrayElement(element))
+            {
+                yield return message;
+            }
+        }
+    }
+
+    private static IEnumerable<ReadableStreamMessage> CompleteJsonArrayElement(StringBuilder element)
+    {
+        var raw = element.ToString().Trim();
+        element.Clear();
+        if (raw.Length == 0)
+        {
+            yield break;
+        }
+
+        yield return new ReadableStreamMessage
+        {
+            Type = ReadableStreamMessageType.Data,
+            Data = DecodeJsonArrayElement(raw),
+            Raw = raw
+        };
+    }
+
+    private static string DecodeJsonArrayElement(string raw)
+    {
+        if (raw == "null")
+        {
+            return "null";
+        }
+
+        if (raw.StartsWith('"'))
+        {
+            return JsonSerializer.Deserialize<string>(raw) ?? string.Empty;
+        }
+
+        return raw;
+    }
+
+    private static async IAsyncEnumerable<ReadableStreamMessage> ReadRawFromPrefixAsync(
+        string prefix,
+        StreamReader reader,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(prefix))
+        {
+            yield return new ReadableStreamMessage
+            {
+                Type = ReadableStreamMessageType.Data,
+                Data = prefix
+            };
+        }
+
+        var buffer = new char[1024];
+        while (true)
+        {
+            var read = await reader.ReadAsync(buffer, cancellationToken);
+            if (read == 0)
+            {
+                yield break;
+            }
+
+            yield return new ReadableStreamMessage
+            {
+                Type = ReadableStreamMessageType.Data,
+                Data = new string(buffer, 0, read)
+            };
+        }
+    }
+
     private static async IAsyncEnumerable<ReadableStreamMessage> ReadServerSentEventsAsync(
         Stream stream,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -591,65 +817,189 @@ public sealed class ReadableHttpExecutor : IReadableHttpExecutor
         string? eventId = null;
         var data = new StringBuilder();
         var raw = new StringBuilder();
+        var pending = new StringBuilder();
+        var buffer = new char[1024];
+        bool? parseAsSse = null;
 
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        while (true)
         {
-            raw.AppendLine(line);
-            if (line.Length == 0)
+            var read = await reader.ReadAsync(buffer, cancellationToken);
+            if (read == 0)
             {
-                if (data.Length > 0)
+                break;
+            }
+
+            var chunk = new string(buffer, 0, read);
+            if (parseAsSse == false)
+            {
+                yield return new ReadableStreamMessage
                 {
+                    Type = ReadableStreamMessageType.Data,
+                    Data = chunk
+                };
+                continue;
+            }
+
+            pending.Append(chunk);
+            if (parseAsSse is null)
+            {
+                var sniff = pending.ToString().TrimStart();
+                if (LooksLikeServerSentEvent(sniff))
+                {
+                    parseAsSse = true;
+                }
+                else if (!CouldBecomeServerSentEvent(sniff))
+                {
+                    parseAsSse = false;
                     yield return new ReadableStreamMessage
                     {
                         Type = ReadableStreamMessageType.Data,
-                        Event = eventName,
-                        Id = eventId,
-                        Data = data.ToString().TrimEnd('\n'),
-                        Raw = raw.ToString()
+                        Data = pending.ToString()
                     };
+                    pending.Clear();
+                    continue;
+                }
+            }
+
+            if (parseAsSse is not true)
+            {
+                continue;
+            }
+
+            while (TryTakeLine(pending, out var line))
+            {
+                raw.AppendLine(line);
+                if (line.Length == 0)
+                {
+                    if (data.Length > 0)
+                    {
+                        yield return new ReadableStreamMessage
+                        {
+                            Type = ReadableStreamMessageType.Data,
+                            Event = eventName,
+                            Id = eventId,
+                            Data = data.ToString().TrimEnd('\n'),
+                            Raw = raw.ToString()
+                        };
+                    }
+
+                    eventName = null;
+                    eventId = null;
+                    data.Clear();
+                    raw.Clear();
+                    continue;
                 }
 
-                eventName = null;
-                eventId = null;
-                data.Clear();
-                raw.Clear();
-                continue;
-            }
+                if (line.StartsWith(':'))
+                {
+                    continue;
+                }
 
-            if (line.StartsWith(':'))
-            {
-                continue;
-            }
+                var separator = line.IndexOf(':', StringComparison.Ordinal);
+                if (separator < 0)
+                {
+                    data.Append(line).Append('\n');
+                    continue;
+                }
 
-            var separator = line.IndexOf(':', StringComparison.Ordinal);
-            var field = separator >= 0 ? line[..separator] : line;
-            var value = separator >= 0 ? line[(separator + 1)..].TrimStart(' ') : string.Empty;
+                var field = line[..separator];
+                var value = line[(separator + 1)..].TrimStart(' ');
 
-            switch (field)
-            {
-                case "event":
-                    eventName = value;
-                    break;
-                case "id":
-                    eventId = value;
-                    break;
-                case "data":
-                    data.Append(value).Append('\n');
-                    break;
+                switch (field)
+                {
+                    case "event":
+                        eventName = value;
+                        break;
+                    case "id":
+                        eventId = value;
+                        break;
+                    case "data":
+                        data.Append(value).Append('\n');
+                        break;
+                }
             }
         }
 
-        if (data.Length > 0)
+        if (parseAsSse == false)
         {
-            yield return new ReadableStreamMessage
+            if (pending.Length > 0)
             {
-                Type = ReadableStreamMessageType.Data,
-                Event = eventName,
-                Id = eventId,
-                Data = data.ToString().TrimEnd('\n'),
-                Raw = raw.ToString()
-            };
+                yield return new ReadableStreamMessage
+                {
+                    Type = ReadableStreamMessageType.Data,
+                    Data = pending.ToString()
+                };
+            }
         }
+        else
+        {
+            if (pending.Length > 0)
+            {
+                var line = pending.ToString();
+                raw.Append(line);
+                if (line.StartsWith("data:", StringComparison.Ordinal))
+                {
+                    data.Append(line["data:".Length..].TrimStart(' ')).Append('\n');
+                }
+                else if (!line.StartsWith(':'))
+                {
+                    data.Append(line).Append('\n');
+                }
+            }
+
+            if (data.Length > 0)
+            {
+                yield return new ReadableStreamMessage
+                {
+                    Type = ReadableStreamMessageType.Data,
+                    Event = eventName,
+                    Id = eventId,
+                    Data = data.ToString().TrimEnd('\n'),
+                    Raw = raw.ToString()
+                };
+            }
+        }
+    }
+
+    private static bool LooksLikeServerSentEvent(string value)
+    {
+        return value.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("event:", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("id:", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("retry:", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith(':');
+    }
+
+    private static bool CouldBecomeServerSentEvent(string value)
+    {
+        if (value.Length == 0)
+        {
+            return true;
+        }
+
+        return "data:".StartsWith(value, StringComparison.OrdinalIgnoreCase)
+            || "event:".StartsWith(value, StringComparison.OrdinalIgnoreCase)
+            || "id:".StartsWith(value, StringComparison.OrdinalIgnoreCase)
+            || "retry:".StartsWith(value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryTakeLine(StringBuilder pending, out string line)
+    {
+        for (var index = 0; index < pending.Length; index++)
+        {
+            if (pending[index] != '\n')
+            {
+                continue;
+            }
+
+            var length = index > 0 && pending[index - 1] == '\r' ? index - 1 : index;
+            line = pending.ToString(0, length);
+            pending.Remove(0, index + 1);
+            return true;
+        }
+
+        line = string.Empty;
+        return false;
     }
 
     private static string? TryReadText(byte[] bytes, MediaTypeHeaderValue? contentType)

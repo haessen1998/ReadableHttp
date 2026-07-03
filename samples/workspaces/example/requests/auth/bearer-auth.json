@@ -1,9 +1,0 @@
-{
-  "name": "Bearer auth",
-  "method": "GET",
-  "url": "{{baseUrl}}/bearer",
-  "auth": {
-    "type": "bearer",
-    "token": "{{bearerToken}}"
-  }
-}

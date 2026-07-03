@@ -19,6 +19,8 @@ public sealed class AppFilePicker
         WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
         var folder = await picker.PickSingleFolderAsync();
         return folder?.Path;
+#elif MACCATALYST
+        return await MacCatalystFolderPicker.PickFolderAsync(title);
 #else
         await Task.CompletedTask;
         return null;
@@ -51,4 +53,62 @@ public sealed class AppFilePicker
             ? Path.GetDirectoryName(result.FullPath)
             : null;
     }
+
+#if MACCATALYST
+    private sealed class MacCatalystFolderPicker : UIKit.UIDocumentPickerDelegate
+    {
+        private readonly TaskCompletionSource<string?> _completionSource = new();
+
+        private MacCatalystFolderPicker()
+        {
+        }
+
+        public static Task<string?> PickFolderAsync(string title)
+        {
+            var presenter = Microsoft.Maui.ApplicationModel.Platform.GetCurrentUIViewController();
+            if (presenter is null)
+            {
+                return Task.FromResult<string?>(null);
+            }
+
+            var folderPicker = new MacCatalystFolderPicker();
+            var picker = new UIKit.UIDocumentPickerViewController([UniformTypeIdentifiers.UTTypes.Folder], false)
+            {
+                AllowsMultipleSelection = false,
+                Delegate = folderPicker,
+                Title = title
+            };
+
+            presenter.PresentViewController(picker, true, null);
+            return folderPicker._completionSource.Task;
+        }
+
+        public override void DidPickDocument(UIKit.UIDocumentPickerViewController controller, Foundation.NSUrl url)
+        {
+            Complete(url);
+        }
+
+        public override void DidPickDocument(UIKit.UIDocumentPickerViewController controller, Foundation.NSUrl[] urls)
+        {
+            Complete(urls.FirstOrDefault());
+        }
+
+        public override void WasCancelled(UIKit.UIDocumentPickerViewController controller)
+        {
+            _completionSource.TrySetResult(null);
+        }
+
+        private void Complete(Foundation.NSUrl? url)
+        {
+            if (url is null)
+            {
+                _completionSource.TrySetResult(null);
+                return;
+            }
+
+            url.StartAccessingSecurityScopedResource();
+            _completionSource.TrySetResult(url.Path);
+        }
+    }
+#endif
 }

@@ -35,6 +35,9 @@ coverage/
 *.coverage
 *.coveragexml
 
+# Local sample workspaces
+samples/workspaces/
+
 # OS files
 Thumbs.db
 .DS_Store

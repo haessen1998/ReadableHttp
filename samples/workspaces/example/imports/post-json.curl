@@ -1,1 +1,0 @@
-curl -X POST 'https://httpbin.org/post' -H 'accept: application/json' -H 'content-type: application/json' --data-raw '{"name":"ReadableHttp","kind":"curl"}'

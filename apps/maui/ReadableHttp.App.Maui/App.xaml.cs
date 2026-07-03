@@ -1,14 +1,14 @@
-﻿namespace ReadableHttp.App.Maui;
+namespace ReadableHttp.App.Maui;
 
 public partial class App : Application
 {
-	public App()
-	{
-		InitializeComponent();
-	}
+    public App()
+    {
+        InitializeComponent();
+    }
 
-	protected override Window CreateWindow(IActivationState? activationState)
-	{
-		return new Window(new MainPage()) { Title = "ReadableHttp.App.Maui" };
-	}
+    protected override Window CreateWindow(IActivationState? activationState)
+    {
+        return new MainWindow();
+    }
 }

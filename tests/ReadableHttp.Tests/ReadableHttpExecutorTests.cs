@@ -323,6 +323,103 @@ public sealed class ReadableHttpExecutorTests
     }
 
     [Fact]
+    public async Task StreamAsync_auto_reads_plain_text_event_streams_as_raw_chunks()
+    {
+        var handler = new MockHttpMessageHandler((_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("Hello! How can I help you today?")
+            };
+            response.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/event-stream");
+            return Task.FromResult(response);
+        });
+        var executor = new ReadableHttpExecutor(handler);
+
+        var messages = new List<ReadableStreamMessage>();
+        await foreach (var message in executor.StreamAsync(
+            new ReadableRequest
+            {
+                Method = "GET",
+                Url = "https://api.example.test/plain-event-stream"
+            },
+            cancellationToken: TestContext.Current.CancellationToken))
+        {
+            messages.Add(message);
+        }
+
+        var data = string.Concat(messages
+            .Where(message => message.Type == ReadableStreamMessageType.Data)
+            .Select(message => message.Data));
+        Assert.Equal("Hello! How can I help you today?", data);
+        Assert.Equal(ReadableStreamMessageType.Completed, messages[^1].Type);
+    }
+
+    [Fact]
+    public async Task StreamAsync_reads_json_array_as_stream_items()
+    {
+        var handler = new MockHttpMessageHandler((_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[\"Hello\",\"!\",\" 😊 How can\",\" I help you\",\" today?\",\"\\n\"]")
+            };
+            response.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+            return Task.FromResult(response);
+        });
+        var executor = new ReadableHttpExecutor(handler);
+
+        var messages = new List<ReadableStreamMessage>();
+        await foreach (var message in executor.StreamAsync(
+            new ReadableRequest
+            {
+                Method = "GET",
+                Url = "https://api.example.test/async-enumerable"
+            },
+            cancellationToken: TestContext.Current.CancellationToken))
+        {
+            messages.Add(message);
+        }
+
+        var data = messages.Where(message => message.Type == ReadableStreamMessageType.Data).Select(message => message.Data ?? string.Empty).ToArray();
+        Assert.Equal(["Hello", "!", " 😊 How can", " I help you", " today?", "\n"], data);
+        Assert.Equal(ReadableStreamMessageType.Completed, messages[^1].Type);
+    }
+
+    [Fact]
+    public async Task StreamAsync_auto_falls_back_to_raw_for_json_content_that_is_not_an_array()
+    {
+        var handler = new MockHttpMessageHandler((_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("data: hello\n\ndata: world\n\n")
+            };
+            response.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+            return Task.FromResult(response);
+        });
+        var executor = new ReadableHttpExecutor(handler);
+
+        var messages = new List<ReadableStreamMessage>();
+        await foreach (var message in executor.StreamAsync(
+            new ReadableRequest
+            {
+                Method = "GET",
+                Url = "https://api.example.test/json-but-raw-stream"
+            },
+            cancellationToken: TestContext.Current.CancellationToken))
+        {
+            messages.Add(message);
+        }
+
+        var data = string.Concat(messages
+            .Where(message => message.Type == ReadableStreamMessageType.Data)
+            .Select(message => message.Data));
+        Assert.Equal("data: hello\n\ndata: world\n\n", data);
+        Assert.Equal(ReadableStreamMessageType.Completed, messages[^1].Type);
+    }
+
+    [Fact]
     public async Task SendAsync_preserves_factory_client_timeout_when_timeout_is_not_explicit()
     {
         HttpClient? client = null;

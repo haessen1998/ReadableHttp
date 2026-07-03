@@ -13,6 +13,7 @@ public sealed class AppSettingsStore
             TryFilePath = Preferences.Default.Get(Prefix + nameof(AppSettings.TryFilePath), defaults.TryFilePath),
             WorkspaceHistory = Preferences.Default.Get(Prefix + nameof(AppSettings.WorkspaceHistory), defaults.WorkspaceHistory),
             Language = Preferences.Default.Get(Prefix + nameof(AppSettings.Language), defaults.Language),
+            FontSize = Preferences.Default.Get(Prefix + nameof(AppSettings.FontSize), defaults.FontSize),
             ThemeMode = Preferences.Default.Get(Prefix + nameof(AppSettings.ThemeMode), defaults.ThemeMode),
             DarkMode = Preferences.Default.Get(Prefix + nameof(AppSettings.DarkMode), defaults.DarkMode),
             ProxyMode = Preferences.Default.Get(
@@ -32,6 +33,7 @@ public sealed class AppSettingsStore
         Preferences.Default.Set(Prefix + nameof(AppSettings.TryFilePath), settings.TryFilePath);
         Preferences.Default.Set(Prefix + nameof(AppSettings.WorkspaceHistory), settings.WorkspaceHistory);
         Preferences.Default.Set(Prefix + nameof(AppSettings.Language), settings.Language);
+        Preferences.Default.Set(Prefix + nameof(AppSettings.FontSize), settings.FontSize);
         Preferences.Default.Set(Prefix + nameof(AppSettings.ThemeMode), settings.ThemeMode);
         Preferences.Default.Set(Prefix + nameof(AppSettings.DarkMode), settings.DarkMode);
         Preferences.Default.Set(Prefix + nameof(AppSettings.ProxyMode), settings.ProxyMode);

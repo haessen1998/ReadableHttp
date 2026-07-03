@@ -49,6 +49,7 @@ internal static class ReadableCliOptions
             null or "" or "auto" => ReadableStreamFormat.Auto,
             "sse" or "server-sent-events" => ReadableStreamFormat.ServerSentEvents,
             "lines" or "line" or "jsonl" or "ndjson" => ReadableStreamFormat.Lines,
+            "json-array" or "jsonarray" or "array" => ReadableStreamFormat.JsonArray,
             "raw" => ReadableStreamFormat.Raw,
             _ => throw new ArgumentException($"Unknown stream format '{value}'.")
         };

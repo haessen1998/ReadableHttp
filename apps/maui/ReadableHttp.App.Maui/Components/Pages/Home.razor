@@ -10,6 +10,17 @@
                   UrlChanged="@State.SetUrl"
                   BodyText="@State.BodyText"
                   BodyTextChanged="@State.SetBodyText"
+                  OnFormatBody="@State.FormatBody"
+                  BodyType="@State.BodyType"
+                  BodyTypeChanged="@State.SetBodyType"
+                  BodyContentType="@State.BodyContentType"
+                  BodyContentTypeChanged="@State.SetBodyContentType"
+                  RequestQuery="@State.RequestQuery"
+                  RequestHeaders="@State.RequestHeaders"
+                  RequestForm="@State.RequestForm"
+                  OnAddNameValue="@State.AddNameValue"
+                  OnSetNameValue="@State.SetNameValue"
+                  OnRemoveNameValue="@State.RemoveNameValue"
                   IsSending="@State.IsSending"
                   ViewMode="@State.ViewMode"
                   RawContent="@State.RawContent"
@@ -19,6 +30,11 @@
                   WorkspaceName="@State.WorkspaceName"
                   WorkspaceNameChanged="@State.SetWorkspaceName"
                   WorkspaceTypeLabel="@State.WorkspaceTypeLabel"
+                  WorkspaceVariables="@State.WorkspaceVariables"
+                  CollectionVariables="@State.CollectionVariables"
+                  OnAddVariable="@State.AddVariable"
+                  OnSetVariable="@State.SetVariable"
+                  OnRemoveVariable="@State.RemoveVariable"
                   WorkspaceRemoteUrl="@State.WorkspaceRemoteUrl"
                   WorkspaceRemoteUrlChanged="@State.SetWorkspaceRemoteUrl"
                   WorkspacePath="@State.WorkspacePath"
@@ -36,7 +52,11 @@
                   SpecificationEndpoint="@State.SpecificationEndpoint"
                   SpecificationEndpointChanged="@State.SetSpecificationEndpoint"
                   SpecificationPath="@State.SpecificationPath"
+                  SpecificationCachePath="@State.SpecificationCachePath"
+                  SpecificationCacheStatus="@State.SpecificationCacheStatus"
+                  SpecificationLastRefreshedLabel="@State.SpecificationLastRefreshedLabel"
                   ActiveSource="@State.ActiveSource"
+                  DocumentTitle="@State.DocumentTitle"
                   OperationCount="@State.Operations.Count"
                   UseSystemProxy="@State.UseSystemProxy"
                   ProxyMode="@State.ProxyMode"
@@ -50,8 +70,12 @@
                   SelectedResponseText="@State.SelectedResponseText"
                   RequestTabs="@State.RequestTabs"
                   ActiveRequestTabId="@State.ActiveRequestTabId"
+                  PendingCloseTabId="@State.PendingCloseTabId"
                   ActiveRequestOrigin="@State.ActiveRequestTab?.Origin"
+                  AboutDescription="@State.AboutDescription"
+                  AboutStats="@State.AboutStats"
                   SettingsDraft="@State.SettingsDraft"
+                  T="@State.T"
                   OnSend="@State.SendAsync"
                   OnSaveRequest="@State.SaveActiveRequestAsync"
                   OnSaveRequestAsNew="@State.SaveActiveRequestAsNewAsync"
@@ -67,12 +91,18 @@
                   CustomProxyPasswordChanged="@State.SetDraftCustomProxyPassword"
                   DevToolsEnabledChanged="@State.SetDraftDevToolsEnabled"
                   LanguageChanged="@State.SetDraftLanguage"
+                  FontSizeChanged="@State.SetDraftFontSize"
                   OnNewScratchRequest="@State.NewScratchRequest"
                   OnPickWorkspace="@State.PickWorkspaceAsync"
                   OnNewCollection="@State.NewCollection"
                   OnPickTryFile="@State.PickTryFileAsync"
                   OnSelectOpenTab="@State.SelectRequestTab"
                   OnCloseOpenTab="@State.CloseRequestTab"
+                  OnConfirmCloseOpenTab="@State.ConfirmCloseRequestTab"
+                  OnCancelCloseOpenTab="@State.CancelCloseRequestTab"
+                  OnSaveOpenTab="@State.SaveRequestTabAsync"
+                  OnCloseOtherOpenTabs="@State.CloseOtherRequestTabs"
+                  OnCloseAllOpenTabs="@State.CloseAllRequestTabs"
                   OnSetRequestTab="@State.SetRequestTab"
                   OnSelectResponseNode="@State.SelectResponseNode">
     <PreviewContent>
@@ -92,6 +122,7 @@
     protected override void OnInitialized()
     {
         State.Changed += HandleStateChanged;
+        State.ChangedAsync += HandleStateChangedAsync;
     }
 
     private async void HandleStateChanged()
@@ -106,8 +137,21 @@
         }
     }
 
+    private async Task HandleStateChangedAsync()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception exception)
+        {
+            await DispatchExceptionAsync(exception);
+        }
+    }
+
     public void Dispose()
     {
         State.Changed -= HandleStateChanged;
+        State.ChangedAsync -= HandleStateChangedAsync;
     }
 }

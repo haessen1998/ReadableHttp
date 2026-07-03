@@ -10,6 +10,8 @@ public sealed class AppSettings
 
     public string Language { get; set; } = "system";
 
+    public string FontSize { get; set; } = "medium";
+
     public string ThemeMode { get; set; } = "system";
 
     public bool DarkMode { get; set; }

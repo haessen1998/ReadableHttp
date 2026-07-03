@@ -1,16 +1,39 @@
-<section class="main-stage">
-    <nav class="request-tab-strip" aria-label="Open requests">
+<section class="main-stage" @onclick="CloseTabMenu">
+    <nav class="request-tab-strip" aria-label="Open requests" @onclick="CloseTabMenu">
         @foreach (var tab in RequestTabs)
         {
-            <button @key="tab.Id" class="@OpenTabClass(tab)" @onclick="() => OnSelectOpenTab.InvokeAsync(tab.Id)">
-                <span class="tab-origin @tab.Origin.ToString().ToLowerInvariant()"></span>
-                <strong>@tab.Title</strong>
-                @if (tab.IsDirty)
+            <div @key="tab.Id" class="tab-wrap">
+                <button class="@OpenTabClass(tab)"
+                        @onclick="() => SelectOpenTab(tab.Id)"
+                        @oncontextmenu:preventDefault="true"
+                        @oncontextmenu="() => ToggleTabMenu(tab.Id)">
+                    <span class="tab-origin icon" title="@tab.Origin">@TabIcon(tab.Origin)</span>
+                    <strong>@tab.Title</strong>
+                    @if (tab.IsDirty)
+                    {
+                        <em>●</em>
+                    }
+                    <i @onclick:stopPropagation="true" @onclick="() => OnCloseOpenTab.InvokeAsync(tab.Id)">×</i>
+                </button>
+                @if (PendingCloseTabId == tab.Id)
                 {
-                    <em>●</em>
+                    <div class="tab-confirm" @onclick:stopPropagation="true">
+                        <span>@T("unsaved")</span>
+                        <button @onclick="() => SaveAndCloseTab(tab.Id)">@T("save")</button>
+                        <button @onclick="() => OnConfirmCloseOpenTab.InvokeAsync(tab.Id)">@T("discard")</button>
+                        <button @onclick="OnCancelCloseOpenTab">@T("cancel")</button>
+                    </div>
                 }
-                <i @onclick:stopPropagation="true" @onclick="() => OnCloseOpenTab.InvokeAsync(tab.Id)">×</i>
-            </button>
+                @if (contextMenuTabId == tab.Id)
+                {
+                    <div class="tab-menu" @onclick:stopPropagation="true">
+                        <button @onclick="() => OnSaveOpenTab.InvokeAsync(tab.Id)">@T("save")</button>
+                        <button @onclick="() => OnCloseOpenTab.InvokeAsync(tab.Id)">@T("close")</button>
+                        <button @onclick="() => OnCloseOtherOpenTabs.InvokeAsync(tab.Id)">@T("closeOthers")</button>
+                        <button @onclick="OnCloseAllOpenTabs">@T("closeAll")</button>
+                    </div>
+                }
+            </div>
         }
         <button class="new-tab-button" title="New scratch request" @onclick="OnNewScratchRequest">+</button>
     </nav>
@@ -34,9 +57,7 @@
             <div class="url-field">
                 <input value="@Url" @onchange="HandleUrlChanged" />
             </div>
-            <button class="send-button" @onclick="OnSend" disabled="@IsSending">Send</button>
-            <button class="save-button" @onclick="OnSaveRequest">Save</button>
-            <button class="save-as-button" @onclick="OnSaveRequestAsNew">Save As</button>
+            <button class="send-button" @onclick="OnSend" disabled="@IsSending"><span class="fluent-icon">@Icon("send")</span><span>@T("send")</span></button>
         </header>
     }
 
@@ -47,36 +68,44 @@
     {
         <section class="settings-page">
             <header>
-                <span>Settings</span>
-                <strong>Global</strong>
+                <span>@T("settings")</span>
+                <strong>@T("global")</strong>
             </header>
             <section class="settings-section">
-                <h2>Preferences</h2>
+                <h2>@T("preferences")</h2>
                 <label>
-                    <span>Theme</span>
+                    <span>@T("theme")</span>
                     <select value="@SettingsDraft.ThemeMode" @onchange="HandleThemeModeChanged">
-                        <option value="@ApiClientWorkspaceState.ThemeSystem">System</option>
-                        <option value="@ApiClientWorkspaceState.ThemeLight">Light</option>
-                        <option value="@ApiClientWorkspaceState.ThemeDark">Dark</option>
+                        <option value="@ApiClientWorkspaceState.ThemeSystem">@T("system")</option>
+                        <option value="@ApiClientWorkspaceState.ThemeLight">@T("light")</option>
+                        <option value="@ApiClientWorkspaceState.ThemeDark">@T("dark")</option>
                     </select>
                 </label>
                 <label>
-                    <span>Language</span>
+                    <span>@T("language")</span>
                     <select value="@SettingsDraft.Language" @onchange="HandleLanguageChanged">
-                        <option value="system">System</option>
+                        <option value="system">@T("system")</option>
                         <option value="zh-CN">简体中文</option>
                         <option value="en-US">English</option>
                     </select>
                 </label>
+                <label>
+                    <span>@T("fontSize")</span>
+                    <select value="@SettingsDraft.FontSize" @onchange="HandleFontSizeChanged">
+                        <option value="@ApiClientWorkspaceState.FontSmall">@T("small")</option>
+                        <option value="@ApiClientWorkspaceState.FontMedium">@T("medium")</option>
+                        <option value="@ApiClientWorkspaceState.FontLarge">@T("large")</option>
+                    </select>
+                </label>
             </section>
             <section class="settings-section">
-                <h2>System</h2>
+                <h2>@T("system")</h2>
                 <label>
-                    <span>Proxy</span>
+                    <span>@T("proxy")</span>
                     <select value="@SettingsDraft.ProxyMode" @onchange="HandleProxyModeChanged">
-                        <option value="@ApiClientWorkspaceState.ProxyNone">No proxy</option>
-                        <option value="@ApiClientWorkspaceState.ProxySystem">System proxy</option>
-                        <option value="@ApiClientWorkspaceState.ProxyCustom">Custom proxy</option>
+                        <option value="@ApiClientWorkspaceState.ProxyNone">@T("noProxy")</option>
+                        <option value="@ApiClientWorkspaceState.ProxySystem">@T("systemProxy")</option>
+                        <option value="@ApiClientWorkspaceState.ProxyCustom">@T("customProxy")</option>
                     </select>
                 </label>
                 @if (SettingsDraft.ProxyMode == ApiClientWorkspaceState.ProxyCustom)
@@ -92,43 +121,56 @@
                 <p>Local assistant context is enabled. Provider settings can be added here when the AI package is wired to a runtime.</p>
             </section>
             <footer class="settings-footer">
-                <button class="save-button" @onclick="OnSaveSettings">Save Settings</button>
+                <button class="save-button" @onclick="OnSaveSettings">@T("save")</button>
             </footer>
+        </section>
+    }
+    else if (ActiveRequestOrigin == RequestTabOrigin.About)
+    {
+        <section class="config-page about-page">
+            <header>
+                <span>@T("about")</span>
+                <strong>@DocumentTitle</strong>
+            </header>
+            <section class="config-section">
+                <h2>@DocumentTitle</h2>
+                <p>@AboutDescription</p>
+                <div class="config-grid">
+                    @foreach (var stat in AboutStats)
+                    {
+                        <span @key="stat.Key">@stat.Key <strong>@stat.Value</strong></span>
+                    }
+                </div>
+            </section>
         </section>
     }
     else if (ActiveRequestOrigin == RequestTabOrigin.Workspace)
     {
         <section class="config-page">
             <header>
-                <span>Workspace</span>
+                <span>@T("workspace")</span>
                 <strong>@WorkspaceName</strong>
             </header>
             <section class="config-section">
-                <h2>Scope</h2>
-                <label><span>Name</span><input value="@WorkspaceName" @onchange="HandleWorkspaceNameChanged" /></label>
-                <label><span>Type</span><input value="@WorkspaceTypeLabel" readonly /></label>
-                <label><span>Path</span><input value="@WorkspacePath" readonly /></label>
+                <h2>@T("scope")</h2>
+                <label><span>@T("name")</span><input value="@WorkspaceName" @onchange="HandleWorkspaceNameChanged" /></label>
+                <label><span>@T("type")</span><input value="@WorkspaceTypeLabel" readonly /></label>
+                <label><span>@T("path")</span><input value="@WorkspacePath" readonly /></label>
                 @if (WorkspaceTypeLabel == "Git")
                 {
                     <label><span>Remote URL</span><input value="@WorkspaceRemoteUrl" @onchange="HandleWorkspaceRemoteUrlChanged" /></label>
                 }
                 <div class="config-grid">
-                    <span>Collections <strong>@CollectionCount</strong></span>
-                    <span>Specifications <strong>@SpecificationCount</strong></span>
+                    <span>@T("collections") <strong>@CollectionCount</strong></span>
+                    <span>@T("specifications") <strong>@SpecificationCount</strong></span>
                 </div>
             </section>
             <section class="config-section">
-                <h2>Environment</h2>
-                <table class="config-table">
-                    <tbody>
-                        <tr><td>baseUrl</td><td>Not set</td><td>Workspace default</td></tr>
-                        <tr><td>auth</td><td>Inherited</td><td>Request can override</td></tr>
-                        <tr><td>proxy</td><td>@ProxyMode</td><td>Global setting</td></tr>
-                    </tbody>
-                </table>
+                <h2>@T("environment")</h2>
+                @RenderVariableEditor("workspace", WorkspaceVariables)
             </section>
             <footer class="settings-footer">
-                <button class="save-button" @onclick="OnSaveWorkspaceConfig">Save Workspace</button>
+                <button class="save-button" @onclick="OnSaveWorkspaceConfig">@T("saveWorkspace")</button>
             </footer>
         </section>
     }
@@ -136,58 +178,73 @@
     {
         <section class="config-page">
             <header>
-                <span>Collection</span>
+                <span>@T("collection")</span>
                 <strong>@CollectionName</strong>
             </header>
             <section class="config-section">
-                <h2>Scope</h2>
-                <label><span>Name</span><input value="@CollectionName" @onchange="HandleCollectionNameChanged" /></label>
-                <label><span>Request directory</span><input value="@CollectionRequestDirectory" @onchange="HandleCollectionRequestDirectoryChanged" /></label>
+                <h2>@T("scope")</h2>
+                <label><span>@T("name")</span><input value="@CollectionName" @onchange="HandleCollectionNameChanged" /></label>
+                <label><span>@T("requestDirectory")</span><input value="@CollectionRequestDirectory" @onchange="HandleCollectionRequestDirectoryChanged" /></label>
                 <div class="config-grid">
-                    <span>Source <strong>@CollectionSource</strong></span>
-                    <span>Requests <strong>@CollectionRequestCount</strong></span>
+                    <span>@T("source") <strong>@CollectionSource</strong></span>
+                    <span>@T("requests") <strong>@CollectionRequestCount</strong></span>
                 </div>
             </section>
             <section class="config-section">
-                <h2>Environment</h2>
-                <table class="config-table">
-                    <tbody>
-                        <tr><td>baseUrl</td><td>Inherited</td><td>From workspace</td></tr>
-                        <tr><td>auth</td><td>Inherited</td><td>Collection override pending</td></tr>
-                        <tr><td>headers</td><td>Inherited</td><td>Request can override</td></tr>
-                    </tbody>
-                </table>
+                <h2>@T("environment")</h2>
+                @RenderVariableEditor("collection", CollectionVariables)
             </section>
             <footer class="settings-footer">
-                <button class="save-button" @onclick="OnSaveCollectionConfig">Save Collection</button>
+                <button class="save-button" @onclick="OnSaveCollectionConfig">@T("saveCollection")</button>
             </footer>
         </section>
     }
     else if (ActiveRequestOrigin == RequestTabOrigin.SpecificationConfig)
     {
-        <section class="config-page">
+        <section class="config-page spec-config-page">
             <header>
-                <span>Specification</span>
+                <span>@T("specification")</span>
                 <strong>@SpecificationName</strong>
             </header>
-            <section class="config-section">
-                <h2>Source</h2>
-                <label><span>Name</span><input value="@SpecificationName" @onchange="HandleSpecificationNameChanged" /></label>
-                <label><span>Type</span><input value="@SpecificationSourceLabel" readonly /></label>
+            <section class="spec-config-summary">
+                <span><small>@T("source")</small><strong>@SpecificationSourceLabel</strong></span>
+                <span><small>@T("document")</small><strong>@SpecificationCacheStatus</strong></span>
+                <span><small>@T("lastRefresh")</small><strong>@SpecificationLastRefreshedLabel</strong></span>
+            </section>
+            <section class="config-section spec-config-section">
+                <h2>@T("source")</h2>
+                <div class="config-field">
+                    <span>@T("name")</span>
+                    <input value="@SpecificationName" @onchange="HandleSpecificationNameChanged" />
+                </div>
+                <div class="config-field">
+                    <span>@T("type")</span>
+                    <input value="@SpecificationSourceLabel" readonly />
+                </div>
                 @if (SpecificationSourceLabel == "RemoteEndpoint")
                 {
-                    <label><span>Endpoint</span><input value="@SpecificationEndpoint" @onchange="HandleSpecificationEndpointChanged" /></label>
+                    <div class="config-field">
+                        <span>Endpoint</span>
+                        <input value="@SpecificationEndpoint" @onchange="HandleSpecificationEndpointChanged" />
+                    </div>
+                    <div class="config-field">
+                        <span>@T("cachedDocument")</span>
+                        <input value="@SpecificationCachePath" readonly />
+                    </div>
                 }
                 else
                 {
-                    <label><span>Path</span><input value="@SpecificationPath" readonly /></label>
+                    <div class="config-field">
+                        <span>@T("path")</span>
+                        <input value="@SpecificationPath" readonly />
+                    </div>
                 }
             </section>
             <footer class="settings-footer">
-                <button class="save-button" @onclick="OnSaveSpecificationConfig">Save Specification</button>
+                <button class="save-button" @onclick="OnSaveSpecificationConfig">@T("saveSpecification")</button>
                 @if (SpecificationSourceLabel == "RemoteEndpoint")
                 {
-                    <button class="save-as-button" @onclick="OnRefreshSpecificationConfig">Refresh</button>
+                    <button class="save-as-button" @onclick="OnRefreshSpecificationConfig">@T("refresh")</button>
                 }
             </footer>
         </section>
@@ -214,9 +271,33 @@
     {
         <section class="request-canvas">
             <nav class="editor-tabs" aria-label="Request editor tabs">
-                <button class="@RequestTabClass("Params")" @onclick='() => OnSetRequestTab.InvokeAsync("Params")'>Params <span>3</span></button>
-                <button class="@RequestTabClass("Headers")" @onclick='() => OnSetRequestTab.InvokeAsync("Headers")'>Headers <span>3</span></button>
+                <button class="@RequestTabClass("Params")" @onclick='() => OnSetRequestTab.InvokeAsync("Params")'>Params <span>@RequestQuery.Count</span></button>
+                <button class="@RequestTabClass("Body")" @onclick='() => OnSetRequestTab.InvokeAsync("Body")'>Body</button>
+                <button class="@RequestTabClass("Headers")" @onclick='() => OnSetRequestTab.InvokeAsync("Headers")'>Headers <span>@RequestHeaders.Count</span></button>
                 <button class="@RequestTabClass("Auth")" @onclick='() => OnSetRequestTab.InvokeAsync("Auth")'>Auth</button>
+                <button class="tab-coming" type="button">Vars</button>
+                <button class="tab-coming" type="button">Script</button>
+                <button class="tab-coming" type="button">Assert</button>
+                <button class="tab-more" type="button" title="@T("more")">@Icon("chevron")</button>
+                <span class="tab-spacer"></span>
+                @if (RequestTab == "Body")
+                {
+                    <label class="body-type-picker">
+                        <span>@BodyTypeLabel(BodyType)</span>
+                        <select value="@BodyType" @onchange="HandleBodyTypeChanged" title="Body type">
+                            <option value="@ReadableBodyType.MultipartFormData">Multipart Form</option>
+                            <option value="@ReadableBodyType.FormUrlEncoded">Form URL Encoded</option>
+                            <option value="@ReadableBodyType.Json">JSON</option>
+                            <option value="@ReadableBodyType.Xml">XML</option>
+                            <option value="@ReadableBodyType.Raw">TEXT</option>
+                            <option value="@ReadableBodyType.Graphql">GraphQL</option>
+                            <option value="@ReadableBodyType.Html">HTML</option>
+                            <option value="@ReadableBodyType.Javascript">JavaScript</option>
+                            <option value="@ReadableBodyType.BinaryFile">File / Binary</option>
+                            <option value="@ReadableBodyType.None">No Body</option>
+                        </select>
+                    </label>
+                }
             </nav>
 
             <section class="request-config">
@@ -224,47 +305,81 @@
                 {
                     <div class="request-form">
                         <label><span>Name</span><input value="@RequestName" @onchange="HandleRequestNameChanged" /></label>
-                        <table class="param-table">
-                            <tbody>
-                                <tr><td><span class="enabled-dot"></span></td><td>workspace</td><td>@WorkspaceName</td></tr>
-                                <tr><td><span class="enabled-dot"></span></td><td>source</td><td>@ActiveSource</td></tr>
-                                <tr><td><span class="disabled-dot"></span></td><td>operations</td><td>@OperationCount</td></tr>
-                            </tbody>
-                        </table>
+                        @RenderNameValueEditor("query", RequestQuery)
                     </div>
                 }
                 else if (RequestTab == "Headers")
                 {
-                    <table class="param-table">
-                        <tbody>
-                            <tr><td><span class="enabled-dot"></span></td><td>Content-Type</td><td>application/json</td></tr>
-                            <tr><td><span class="enabled-dot"></span></td><td>X-Readable-Client</td><td>maui-webview</td></tr>
-                            <tr><td><span class="disabled-dot"></span></td><td>X-Workspace</td><td>@WorkspaceName</td></tr>
-                        </tbody>
-                    </table>
+                    <div class="request-form">
+                        @RenderNameValueEditor("headers", RequestHeaders)
+                    </div>
+                }
+                else if (RequestTab == "Body")
+                {
+                    <div class="request-form">
+                        <div class="body-settings">
+                            <label>
+                                <span>Content-Type</span>
+                                <input value="@BodyContentType" @onchange="HandleBodyContentTypeChanged" />
+                            </label>
+                            <button type="button" class="mini-tool-button" @onclick="OnFormatBody"><span class="fluent-icon">@Icon("format")</span><span>@T("format")</span></button>
+                        </div>
+                        @if (BodyType == ReadableBodyType.FormUrlEncoded.ToString())
+                        {
+                            @RenderNameValueEditor("form", RequestForm)
+                        }
+                        else if (BodyType == ReadableBodyType.MultipartFormData.ToString())
+                        {
+                            @RenderNameValueEditor("form", RequestForm)
+                        }
+                        else if (BodyType == ReadableBodyType.BinaryFile.ToString())
+                        {
+                            <div class="body-mode-note">File / Binary body will use the file path stored on the request body.</div>
+                        }
+                        else if (BodyType == ReadableBodyType.None.ToString())
+                        {
+                            <div class="body-mode-note">This request will be sent without a body.</div>
+                        }
+                    </div>
                 }
                 else if (RequestTab == "Auth")
                 {
-                    <div class="auth-line"><span>Bearer</span><strong>@(UseSystemProxy ? "system-proxy-enabled" : "manual")</strong></div>
+                    <div class="request-form">
+                        <div class="auth-line"><span>Bearer</span><strong>@(UseSystemProxy ? "system-proxy-enabled" : "manual")</strong></div>
+                    </div>
                 }
             </section>
 
             <div class="split-editor">
                 <section class="editor-pane">
                     <div class="pane-header">
-                        <h2>Request Body</h2>
-                        <span>JSON / raw</span>
+                        <h2>Body</h2>
+                        <div class="pane-actions">
+                            <span>@BodyTypeLabel(BodyType)</span>
+                            <button type="button" class="pane-tool-button" title="@T("format")" @onclick="OnFormatBody"><span class="fluent-icon">@Icon("format")</span></button>
+                        </div>
                     </div>
-                    <textarea value="@BodyText" @onchange="HandleBodyChanged" spellcheck="false"></textarea>
+                    @if (BodyType == ReadableBodyType.FormUrlEncoded.ToString() || BodyType == ReadableBodyType.MultipartFormData.ToString())
+                    {
+                        <div class="form-body-note">Form fields are edited in the Body tab above.</div>
+                    }
+                    else if (BodyType == ReadableBodyType.BinaryFile.ToString() || BodyType == ReadableBodyType.None.ToString())
+                    {
+                        <div class="form-body-note">@BodyTypeLabel(BodyType)</div>
+                    }
+                    else
+                    {
+                        <textarea value="@BodyText" @onchange="HandleBodyChanged" spellcheck="false"></textarea>
+                    }
                 </section>
                 <section class="editor-pane response-pane">
                     <div class="pane-header">
                         <div class="response-crumbs">
-                            <button @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>root</button>
-                            @if (ResponseNodePath != "root")
+                            <button @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>response</button>
+                            @foreach (var crumb in ResponseBreadcrumbs())
                             {
                                 <span>›</span>
-                                <button>@ResponseNodePath</button>
+                                <button @key="crumb.Path" @onclick="() => SelectResponseBreadcrumb(crumb.Path)">@crumb.Label</button>
                             }
                         </div>
                         <div class="response-meta-line">
@@ -310,7 +425,7 @@
                             @if (ResponseNodeKeys.Count > 0)
                             {
                                 <div class="json-node-bar">
-                                    <button class="@ResponseNodeClass("root")" @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>root</button>
+                                    <button class="@ResponseNodeClass("root")" @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>response</button>
                                     @foreach (var node in ResponseNodeKeys)
                                     {
                                         <button @key="node" class="@ResponseNodeClass(node)" @onclick="() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs(node))">@node</button>
@@ -327,12 +442,25 @@
 </section>
 
 @code {
+    private string? contextMenuTabId;
+
     [Parameter] public string Method { get; set; } = "GET";
     [Parameter] public EventCallback<string> MethodChanged { get; set; }
     [Parameter] public string Url { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> UrlChanged { get; set; }
     [Parameter] public string BodyText { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> BodyTextChanged { get; set; }
+    [Parameter] public EventCallback OnFormatBody { get; set; }
+    [Parameter] public string BodyType { get; set; } = ReadableBodyType.None.ToString();
+    [Parameter] public EventCallback<string> BodyTypeChanged { get; set; }
+    [Parameter] public string BodyContentType { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> BodyContentTypeChanged { get; set; }
+    [Parameter] public IReadOnlyList<ReadableNameValue> RequestQuery { get; set; } = [];
+    [Parameter] public IReadOnlyList<ReadableNameValue> RequestHeaders { get; set; } = [];
+    [Parameter] public IReadOnlyList<ReadableNameValue> RequestForm { get; set; } = [];
+    [Parameter] public EventCallback<string> OnAddNameValue { get; set; }
+    [Parameter] public EventCallback<EditableNameValueChange> OnSetNameValue { get; set; }
+    [Parameter] public EventCallback<EditableNameValueChange> OnRemoveNameValue { get; set; }
     [Parameter] public bool IsSending { get; set; }
     [Parameter] public string ViewMode { get; set; } = "request";
     [Parameter] public string RawContent { get; set; } = string.Empty;
@@ -343,6 +471,11 @@
     [Parameter] public string WorkspaceName { get; set; } = "scratch";
     [Parameter] public EventCallback<string> WorkspaceNameChanged { get; set; }
     [Parameter] public string WorkspaceTypeLabel { get; set; } = "Local";
+    [Parameter] public IReadOnlyList<KeyValuePair<string, ReadableVariable>> WorkspaceVariables { get; set; } = [];
+    [Parameter] public IReadOnlyList<KeyValuePair<string, ReadableVariable>> CollectionVariables { get; set; } = [];
+    [Parameter] public EventCallback<string> OnAddVariable { get; set; }
+    [Parameter] public EventCallback<VariableChange> OnSetVariable { get; set; }
+    [Parameter] public EventCallback<VariableChange> OnRemoveVariable { get; set; }
     [Parameter] public string WorkspaceRemoteUrl { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> WorkspaceRemoteUrlChanged { get; set; }
     [Parameter] public string WorkspacePath { get; set; } = string.Empty;
@@ -360,7 +493,11 @@
     [Parameter] public string SpecificationEndpoint { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> SpecificationEndpointChanged { get; set; }
     [Parameter] public string SpecificationPath { get; set; } = string.Empty;
+    [Parameter] public string SpecificationCachePath { get; set; } = string.Empty;
+    [Parameter] public string SpecificationCacheStatus { get; set; } = "Not cached";
+    [Parameter] public string SpecificationLastRefreshedLabel { get; set; } = "Never";
     [Parameter] public string ActiveSource { get; set; } = "Request";
+    [Parameter] public string DocumentTitle { get; set; } = string.Empty;
     [Parameter] public int OperationCount { get; set; }
     [Parameter] public bool UseSystemProxy { get; set; }
     [Parameter] public string ProxyMode { get; set; } = ApiClientWorkspaceState.ProxySystem;
@@ -374,8 +511,12 @@
     [Parameter] public string SelectedResponseText { get; set; } = string.Empty;
     [Parameter] public IReadOnlyList<RequestWorkspaceTab> RequestTabs { get; set; } = [];
     [Parameter] public string? ActiveRequestTabId { get; set; }
+    [Parameter] public string? PendingCloseTabId { get; set; }
     [Parameter] public RequestTabOrigin? ActiveRequestOrigin { get; set; }
+    [Parameter] public string AboutDescription { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<KeyValuePair<string, string>> AboutStats { get; set; } = [];
     [Parameter] public AppSettingsDraft SettingsDraft { get; set; } = new();
+    [Parameter] public Func<string, string> T { get; set; } = static key => key;
     [Parameter] public EventCallback OnSend { get; set; }
     [Parameter] public EventCallback OnSaveRequest { get; set; }
     [Parameter] public EventCallback OnSaveRequestAsNew { get; set; }
@@ -395,10 +536,154 @@
     [Parameter] public EventCallback<string> CustomProxyPasswordChanged { get; set; }
     [Parameter] public EventCallback<bool> DevToolsEnabledChanged { get; set; }
     [Parameter] public EventCallback<string> LanguageChanged { get; set; }
+    [Parameter] public EventCallback<string> FontSizeChanged { get; set; }
     [Parameter] public EventCallback<string> OnSelectOpenTab { get; set; }
     [Parameter] public EventCallback<string> OnCloseOpenTab { get; set; }
+    [Parameter] public EventCallback<string> OnConfirmCloseOpenTab { get; set; }
+    [Parameter] public EventCallback OnCancelCloseOpenTab { get; set; }
+    [Parameter] public EventCallback<string> OnSaveOpenTab { get; set; }
+    [Parameter] public EventCallback<string> OnCloseOtherOpenTabs { get; set; }
+    [Parameter] public EventCallback OnCloseAllOpenTabs { get; set; }
     [Parameter] public EventCallback<string> OnSetRequestTab { get; set; }
     [Parameter] public EventCallback<ResponseNodeSelectedEventArgs> OnSelectResponseNode { get; set; }
+
+    private RenderFragment RenderNameValueEditor(string kind, IReadOnlyList<ReadableNameValue> items) => @<div class="name-value-editor">
+        <div class="name-value-actions">
+            <button type="button" @onclick="() => OnAddNameValue.InvokeAsync(kind)">Add</button>
+        </div>
+        <table class="param-table editable">
+            <thead>
+                <tr><th></th><th>Name</th><th>Value</th><th></th></tr>
+            </thead>
+            <tbody>
+                @for (var index = 0; index < items.Count; index++)
+                {
+                    var item = items[index];
+                    var rowIndex = index;
+                    <tr @key="item">
+                        <td>
+                            <input type="checkbox"
+                                   checked="@item.Enabled"
+                                   @onchange='args => OnSetNameValue.InvokeAsync(new EditableNameValueChange(kind, rowIndex, "enabled", Convert.ToString(args.Value)))' />
+                        </td>
+                        <td>
+                            <input value="@item.Name"
+                                   @onchange='args => OnSetNameValue.InvokeAsync(new EditableNameValueChange(kind, rowIndex, "name", Convert.ToString(args.Value)))' />
+                        </td>
+                        <td>
+                            <input value="@item.Value"
+                                   @onchange='args => OnSetNameValue.InvokeAsync(new EditableNameValueChange(kind, rowIndex, "value", Convert.ToString(args.Value)))' />
+                        </td>
+                        <td>
+                            <button type="button" title="Remove" @onclick='() => OnRemoveNameValue.InvokeAsync(new EditableNameValueChange(kind, rowIndex, "remove", null))'>×</button>
+                        </td>
+                    </tr>
+                }
+                @if (items.Count == 0)
+                {
+                    <tr><td colspan="4" class="empty-row">No values</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>;
+
+    private RenderFragment RenderVariableEditor(string scope, IReadOnlyList<KeyValuePair<string, ReadableVariable>> items) => @<div class="name-value-editor">
+        <div class="name-value-actions">
+            <button type="button" @onclick="() => OnAddVariable.InvokeAsync(scope)">Add</button>
+        </div>
+        <table class="param-table editable">
+            <thead>
+                <tr><th></th><th>Name</th><th>Value</th><th></th></tr>
+            </thead>
+            <tbody>
+                @for (var index = 0; index < items.Count; index++)
+                {
+                    var entry = items[index];
+                    var rowIndex = index;
+                    <tr @key="entry.Key">
+                        <td>
+                            <input type="checkbox"
+                                   checked="@entry.Value.Enabled"
+                                   @onchange='args => OnSetVariable.InvokeAsync(new VariableChange(scope, rowIndex, "enabled", Convert.ToString(args.Value)))' />
+                        </td>
+                        <td>
+                            <input value="@entry.Key"
+                                   @onchange='args => OnSetVariable.InvokeAsync(new VariableChange(scope, rowIndex, "name", Convert.ToString(args.Value)))' />
+                        </td>
+                        <td>
+                            <input value="@VariableValue(entry.Value)"
+                                   @onchange='args => OnSetVariable.InvokeAsync(new VariableChange(scope, rowIndex, "value", Convert.ToString(args.Value)))' />
+                        </td>
+                        <td>
+                            <button type="button" title="Remove" @onclick='() => OnRemoveVariable.InvokeAsync(new VariableChange(scope, rowIndex, "remove", null))'>×</button>
+                        </td>
+                    </tr>
+                }
+                @if (items.Count == 0)
+                {
+                    <tr><td colspan="4" class="empty-row">No variables</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>;
+
+    private static string VariableValue(ReadableVariable variable)
+    {
+        return variable.ToTemplateValue() ?? string.Empty;
+    }
+
+    private static string Icon(string name)
+    {
+        return name switch
+        {
+            "send" => "\uE724",
+            "format" => "\uE8D2",
+            "chevron" => "\uE70D",
+            _ => "\uE712"
+        };
+    }
+
+    private static string BodyTypeLabel(string bodyType)
+    {
+        return Enum.TryParse<ReadableBodyType>(bodyType, ignoreCase: true, out var type)
+            ? type switch
+            {
+                ReadableBodyType.MultipartFormData => "Multipart Form",
+                ReadableBodyType.FormUrlEncoded => "Form URL Encoded",
+                ReadableBodyType.Json => "JSON",
+                ReadableBodyType.Xml => "XML",
+                ReadableBodyType.Raw => "TEXT",
+                ReadableBodyType.Graphql => "GraphQL",
+                ReadableBodyType.Html => "HTML",
+                ReadableBodyType.Javascript => "JavaScript",
+                ReadableBodyType.BinaryFile => "File / Binary",
+                ReadableBodyType.None => "No Body",
+                _ => type.ToString()
+            }
+            : bodyType;
+    }
+
+    private async Task SelectOpenTab(string tabId)
+    {
+        contextMenuTabId = null;
+        await OnSelectOpenTab.InvokeAsync(tabId);
+    }
+
+    private void ToggleTabMenu(string tabId)
+    {
+        contextMenuTabId = contextMenuTabId == tabId ? null : tabId;
+    }
+
+    private void CloseTabMenu()
+    {
+        contextMenuTabId = null;
+    }
+
+    private async Task SaveAndCloseTab(string tabId)
+    {
+        await OnSaveOpenTab.InvokeAsync(tabId);
+        await OnConfirmCloseOpenTab.InvokeAsync(tabId);
+    }
 
     private bool IsRequestEditor => ActiveRequestOrigin is RequestTabOrigin.Scratch
         or RequestTabOrigin.Collection
@@ -417,6 +702,16 @@
     private async Task HandleBodyChanged(ChangeEventArgs args)
     {
         await BodyTextChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleBodyTypeChanged(ChangeEventArgs args)
+    {
+        await BodyTypeChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleBodyContentTypeChanged(ChangeEventArgs args)
+    {
+        await BodyContentTypeChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
     }
 
     private async Task HandleRequestNameChanged(ChangeEventArgs args) => await RequestNameChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
@@ -447,6 +742,8 @@
 
     private async Task HandleLanguageChanged(ChangeEventArgs args) => await LanguageChanged.InvokeAsync(Convert.ToString(args.Value) ?? "system");
 
+    private async Task HandleFontSizeChanged(ChangeEventArgs args) => await FontSizeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.FontMedium);
+
     private string RequestTabClass(string key) => RequestTab == key ? "active" : string.Empty;
 
     private string OpenTabClass(RequestWorkspaceTab tab)
@@ -459,4 +756,43 @@
     private string ResponseNodeClass(string path) => string.Equals(ResponseNodePath, path, StringComparison.Ordinal)
         ? "active"
         : string.Empty;
+
+    private IReadOnlyList<(string Label, string Path)> ResponseBreadcrumbs()
+    {
+        if (string.IsNullOrWhiteSpace(ResponseNodePath) || ResponseNodePath == "root")
+        {
+            return [];
+        }
+
+        var crumbs = new List<(string Label, string Path)>();
+        var path = string.Empty;
+        foreach (var segment in ResponseNodePath.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            path = string.IsNullOrWhiteSpace(path) ? segment : $"{path}.{segment}";
+            crumbs.Add((segment, path));
+        }
+
+        return crumbs;
+    }
+
+    private async Task SelectResponseBreadcrumb(string path)
+    {
+        await OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("/" + path));
+    }
+
+    private static string TabIcon(RequestTabOrigin origin)
+    {
+        return origin switch
+        {
+            RequestTabOrigin.Workspace => "W",
+            RequestTabOrigin.CollectionConfig => "C",
+            RequestTabOrigin.Collection => "R",
+            RequestTabOrigin.Specification => "R",
+            RequestTabOrigin.SpecificationConfig => "S",
+            RequestTabOrigin.SpecificationDocument => "D",
+            RequestTabOrigin.About => "I",
+            RequestTabOrigin.Settings => "⚙",
+            _ => "+"
+        };
+    }
 }

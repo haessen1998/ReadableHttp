@@ -1,8 +1,9 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject ApiClientWorkspaceState State
+@inject AppCommandService Commands
 
-<main class="api-client-shell @(State.IsDarkTheme ? "theme-dark" : "theme-light")">
+<main class="api-client-shell @(State.IsDarkTheme ? "theme-dark" : "theme-light") @State.FontSizeClass">
     @if (!State.ShowExplorer)
     {
         <button class="edge-toggle left" title="展开左侧资源栏" @onclick="State.ToggleExplorer">›</button>
@@ -24,6 +25,7 @@
                              ShowSpecsSection="@State.ShowSpecsSection"
                              ShowRecentSection="@State.ShowRecentSection"
                              WorkspaceOptions="@State.WorkspaceOptions"
+                             T="@State.T"
                              Collections="@State.Collections"
                              SelectedCollection="@State.SelectedCollection"
                              SelectedRequest="@State.SelectedRequest"
@@ -45,6 +47,7 @@
                              OnSaveWorkspace="@State.SaveWorkspaceAsync"
                              OnOpenWorkspaceInExplorer="@State.OpenWorkspaceInExplorer"
                              OnRemoveWorkspaceOption="@State.RemoveWorkspaceOption"
+                             OnDeleteWorkspaceFolder="@State.DeleteWorkspaceFolderAsync"
                              OnDeleteCollection="@State.DeleteSelectedCollectionAsync"
                              OnDeleteRequest="@State.DeleteSelectedRequestAsync"
                              OnGitStatus="@State.GitStatusAsync"
@@ -56,6 +59,8 @@
                              OnToggleCollectionsSection="@State.ToggleCollectionsSection"
                              OnToggleSpecsSection="@State.ToggleSpecsSection"
                              OnToggleRecentSection="@State.ToggleRecentSection"
+                             OnShowCollectionsAbout="@State.OpenCollectionsAbout"
+                             OnShowSpecsAbout="@State.OpenSpecsAbout"
                              OnSelectCollection="@State.SelectCollectionAsync"
                              OnOpenCollectionConfig="@State.OpenCollectionConfigAsync"
                              OnSelectRequest="@State.SelectRequestAsync"
@@ -64,6 +69,7 @@
                              OnDeleteCollectionItem="@State.DeleteCollectionAsync"
                              OnOpenCollectionInExplorer="@State.OpenCollectionInExplorer"
                              OnDuplicateRequest="@State.DuplicateRequestAsync"
+                             OnMoveRequest="@State.MoveRequestAsync"
                              OnDeleteRequestItem="@State.DeleteRequestAsync"
                              OnOpenRequestDefault="@State.OpenRequestDefault"
                              OnShowRequest="@State.ShowRequest"
@@ -73,6 +79,7 @@
                              OnSelectSpec="@State.SelectSpecAsync"
                              OnSelectSpecification="@State.SelectSpecificationAsync"
                              OnRefreshSpecification="@State.RefreshSpecificationAsync"
+                             OnOpenSpecificationConfig="@State.OpenSpecificationConfigAsync"
                              OnOpenSpecificationInExplorer="@State.OpenSpecificationInExplorer"
                              OnDuplicateSpecification="@State.DuplicateSpecificationAsync"
                              OnDeleteSpecification="@State.DeleteSpecificationAsync"
@@ -100,6 +107,7 @@
                             WorkspaceName="@State.WorkspaceName"
                             ProxyMode="@State.ProxyMode"
                             SettingsDraft="@State.SettingsDraft"
+                            T="@State.T"
                             ThemeModeChanged="@State.SetDraftThemeMode"
                             ProxyModeChanged="@State.SetDraftProxyMode"
                             CustomProxyUrlChanged="@State.SetDraftCustomProxyUrl"
@@ -107,14 +115,18 @@
                             CustomProxyPasswordChanged="@State.SetDraftCustomProxyPassword"
                             DevToolsEnabledChanged="@State.SetDraftDevToolsEnabled"
                             LanguageChanged="@State.SetDraftLanguage"
+                            FontSizeChanged="@State.SetDraftFontSize"
                             ActivityLog="@State.ActivityLog"
                             AiMessages="@State.AiMessages"
+                            PendingAiActions="@State.PendingAiActions"
                             AiDraft="@State.AiDraft"
                             AiDraftChanged="@State.SetAiDraft"
                             OnSelectMode="@State.ShowRightPanel"
                             OnToggleInspector="@State.ToggleInspector"
                             OnSelectOperation="@State.SelectOperation"
                             OnSendAiMessage="@State.SendAiMessage"
+                            OnApplyAiAction="@State.ApplyAiAction"
+                            OnDismissAiAction="@State.DismissAiAction"
                             OnSaveSettings="@State.SaveSettings" />
         }
     </section>
@@ -124,7 +136,37 @@
     protected override async Task OnInitializedAsync()
     {
         State.Changed += HandleStateChanged;
+        State.ChangedAsync += HandleStateChangedAsync;
+        Commands.CommandRequested += HandleAppCommandAsync;
         await State.InitializeAsync();
+    }
+
+    private async Task HandleAppCommandAsync(AppCommand command)
+    {
+        await InvokeAsync(async () =>
+        {
+            switch (command)
+            {
+                case AppCommand.NewRequest:
+                    State.NewScratchRequest();
+                    break;
+                case AppCommand.PasteImport:
+                    await State.PasteImportAsync();
+                    break;
+                case AppCommand.ReloadWorkspace:
+                    await State.LoadWorkspaceAsync();
+                    break;
+                case AppCommand.OpenSettings:
+                    State.ShowRightPanel(RightPanelMode.Settings);
+                    break;
+                case AppCommand.ToggleExplorer:
+                    State.ToggleExplorer();
+                    break;
+                case AppCommand.ToggleInspector:
+                    State.ToggleInspector();
+                    break;
+            }
+        });
     }
 
     private async void HandleStateChanged()
@@ -139,8 +181,22 @@
         }
     }
 
+    private async Task HandleStateChangedAsync()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception exception)
+        {
+            await DispatchExceptionAsync(exception);
+        }
+    }
+
     public void Dispose()
     {
         State.Changed -= HandleStateChanged;
+        State.ChangedAsync -= HandleStateChangedAsync;
+        Commands.CommandRequested -= HandleAppCommandAsync;
     }
 }

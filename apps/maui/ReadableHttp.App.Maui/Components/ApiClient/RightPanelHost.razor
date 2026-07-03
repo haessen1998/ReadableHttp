@@ -1,19 +1,20 @@
 @using ReadableHttp.Try
+@using ReadableHttp.AI
 
 <aside class="right-panel">
     <nav class="right-panel-tabs" aria-label="Right panel">
-        <button class="@PanelButtonClass(RightPanelMode.Docs)" title="文档" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Docs)">Doc</button>
+        <button class="@PanelButtonClass(RightPanelMode.Docs)" title="@T("docs")" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Docs)">Doc</button>
         <button class="@PanelButtonClass(RightPanelMode.Ai)" title="AI 对话" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Ai)">AI</button>
-        <button class="@PanelButtonClass(RightPanelMode.Parameters)" title="参数和上下文" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Parameters)">Params</button>
-        <button class="@PanelButtonClass(RightPanelMode.Settings)" title="设置" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Settings)">Set</button>
-        <button class="collapse-button" title="隐藏右栏" @onclick="OnToggleInspector">×</button>
+        <button class="@PanelButtonClass(RightPanelMode.Parameters)" title="@T("parameters")" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Parameters)">Params</button>
+        <button class="@PanelButtonClass(RightPanelMode.Settings)" title="@T("settings")" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Settings)">Set</button>
+        <button class="collapse-button" title="@T("hidePanel")" @onclick="OnToggleInspector">×</button>
     </nav>
 
     @if (Mode == RightPanelMode.Docs)
     {
         <section class="panel-content">
             <header class="panel-title">
-                <span>Documentation</span>
+                <span>@T("docs")</span>
                 <strong>@(ViewMode == "preview" ? "Spec" : "Request")</strong>
             </header>
             <section class="doc-block">
@@ -24,7 +25,7 @@
                 </div>
             </section>
             <section class="doc-block">
-                <h3>Operations</h3>
+                <h3>@T("operations")</h3>
                 <div class="operation-mini-list">
                     @foreach (var operation in Operations.Take(8))
                     {
@@ -35,7 +36,7 @@
                     }
                     @if (Operations.Count == 0)
                     {
-                        <div class="empty-copy">Import a spec to view operations.</div>
+                        <div class="empty-copy">@T("importSpecHint")</div>
                     }
                 </div>
             </section>
@@ -70,10 +71,33 @@
                         <p>@message.Content</p>
                     </div>
                 }
+                @foreach (var action in PendingAiActions)
+                {
+                    <div @key="action.Id" class="ai-action-card">
+                        <header>
+                            <strong>@action.Title</strong>
+                            <span>@ActionSafetyLabel(action)</span>
+                        </header>
+                        <p>@action.Summary</p>
+                        @if (action.RequestPatch is not null)
+                        {
+                            <ul>
+                                @foreach (var change in ActionChanges(action.RequestPatch))
+                                {
+                                    <li @key="change">@change</li>
+                                }
+                            </ul>
+                        }
+                        <footer>
+                            <button class="accent-button" @onclick="() => OnApplyAiAction.InvokeAsync(action.Id)">应用</button>
+                            <button type="button" @onclick="() => OnDismissAiAction.InvokeAsync(action.Id)">忽略</button>
+                        </footer>
+                    </div>
+                }
             </div>
             <footer class="chat-input">
-                <textarea value="@AiDraft" @onchange="HandleAiDraftChanged" placeholder="Ask about this request..." />
-                <button class="accent-button" @onclick="OnSendAiMessage">Send</button>
+                <textarea value="@AiDraft" @onchange="HandleAiDraftChanged" placeholder="@T("askRequest")" />
+                <button class="accent-button" @onclick="OnSendAiMessage">@T("send")</button>
             </footer>
         </section>
     }
@@ -81,28 +105,28 @@
     {
         <section class="panel-content">
             <header class="panel-title">
-                <span>Parameters</span>
+                <span>@T("parameters")</span>
                 <strong>@ActiveSource</strong>
             </header>
             <section class="doc-block">
                 <h3>Request</h3>
                 <dl class="property-list">
-                    <div><dt>Method</dt><dd>@Method</dd></div>
+                    <div><dt>@T("method")</dt><dd>@Method</dd></div>
                     <div><dt>URL</dt><dd>@Url</dd></div>
                     <div><dt>Body</dt><dd>@BodySummary</dd></div>
                     <div><dt>Status</dt><dd>@StatusText</dd></div>
                 </dl>
             </section>
             <section class="doc-block">
-                <h3>Environment</h3>
+                <h3>@T("environment")</h3>
                 <dl class="property-list">
-                    <div><dt>Workspace</dt><dd>@WorkspaceName</dd></div>
-                    <div><dt>Proxy</dt><dd>@ProxyLabel</dd></div>
+                    <div><dt>@T("workspace")</dt><dd>@WorkspaceName</dd></div>
+                    <div><dt>@T("proxy")</dt><dd>@ProxyLabel</dd></div>
                     <div><dt>Spec</dt><dd>@TryFilePath</dd></div>
                 </dl>
             </section>
             <section class="doc-block">
-                <h3>Activity</h3>
+                <h3>@T("activity")</h3>
                 <div class="activity-list">
                     @foreach (var entry in ActivityLog.Take(5))
                     {
@@ -119,25 +143,25 @@
     {
         <section class="panel-content">
             <header class="panel-title">
-                <span>Settings</span>
+                <span>@T("settings")</span>
                 <strong>App</strong>
             </header>
             <section class="doc-block settings-block">
-                <h3>Preferences</h3>
+                <h3>@T("preferences")</h3>
                 <label class="settings-field">
-                    <span>Theme</span>
+                    <span>@T("theme")</span>
                     <select value="@SettingsDraft.ThemeMode" @onchange="HandleThemeModeChanged">
-                        <option value="@ApiClientWorkspaceState.ThemeSystem">System</option>
-                        <option value="@ApiClientWorkspaceState.ThemeLight">Light</option>
-                        <option value="@ApiClientWorkspaceState.ThemeDark">Dark</option>
+                        <option value="@ApiClientWorkspaceState.ThemeSystem">@T("system")</option>
+                        <option value="@ApiClientWorkspaceState.ThemeLight">@T("light")</option>
+                        <option value="@ApiClientWorkspaceState.ThemeDark">@T("dark")</option>
                     </select>
                 </label>
                 <label class="settings-field">
-                    <span>Proxy</span>
+                    <span>@T("proxy")</span>
                     <select value="@SettingsDraft.ProxyMode" @onchange="HandleProxyModeChanged">
-                        <option value="@ApiClientWorkspaceState.ProxyNone">No proxy</option>
-                        <option value="@ApiClientWorkspaceState.ProxySystem">System proxy</option>
-                        <option value="@ApiClientWorkspaceState.ProxyCustom">Custom proxy</option>
+                        <option value="@ApiClientWorkspaceState.ProxyNone">@T("noProxy")</option>
+                        <option value="@ApiClientWorkspaceState.ProxySystem">@T("systemProxy")</option>
+                        <option value="@ApiClientWorkspaceState.ProxyCustom">@T("customProxy")</option>
                     </select>
                 </label>
                 @if (SettingsDraft.ProxyMode == ApiClientWorkspaceState.ProxyCustom)
@@ -157,14 +181,22 @@
                 }
                 <label><input type="checkbox" checked="@SettingsDraft.DevToolsEnabled" @onchange="HandleDevToolsEnabledChanged" /> WebView dev tools</label>
                 <label class="settings-field">
-                    <span>Language</span>
+                    <span>@T("language")</span>
                     <select value="@SettingsDraft.Language" @onchange="HandleLanguageChanged">
-                        <option value="system">System</option>
+                        <option value="system">@T("system")</option>
                         <option value="zh-CN">简体中文</option>
                         <option value="en-US">English</option>
                     </select>
                 </label>
-                <button class="accent-button" @onclick="OnSaveSettings">Save Settings</button>
+                <label class="settings-field">
+                    <span>@T("fontSize")</span>
+                    <select value="@SettingsDraft.FontSize" @onchange="HandleFontSizeChanged">
+                        <option value="@ApiClientWorkspaceState.FontSmall">@T("small")</option>
+                        <option value="@ApiClientWorkspaceState.FontMedium">@T("medium")</option>
+                        <option value="@ApiClientWorkspaceState.FontLarge">@T("large")</option>
+                    </select>
+                </label>
+                <button class="accent-button" @onclick="OnSaveSettings">@T("save")</button>
             </section>
         </section>
     }
@@ -186,6 +218,7 @@
     [Parameter] public string WorkspaceName { get; set; } = "scratch";
     [Parameter] public string ProxyMode { get; set; } = ApiClientWorkspaceState.ProxySystem;
     [Parameter] public AppSettingsDraft SettingsDraft { get; set; } = new();
+    [Parameter] public Func<string, string> T { get; set; } = static key => key;
     [Parameter] public EventCallback<string> ThemeModeChanged { get; set; }
     [Parameter] public EventCallback<string> ProxyModeChanged { get; set; }
     [Parameter] public EventCallback<string> CustomProxyUrlChanged { get; set; }
@@ -193,14 +226,18 @@
     [Parameter] public EventCallback<string> CustomProxyPasswordChanged { get; set; }
     [Parameter] public EventCallback<bool> DevToolsEnabledChanged { get; set; }
     [Parameter] public EventCallback<string> LanguageChanged { get; set; }
+    [Parameter] public EventCallback<string> FontSizeChanged { get; set; }
     [Parameter] public IReadOnlyList<ActivityEntry> ActivityLog { get; set; } = [];
     [Parameter] public IReadOnlyList<AiChatMessage> AiMessages { get; set; } = [];
+    [Parameter] public IReadOnlyList<ReadableAiAction> PendingAiActions { get; set; } = [];
     [Parameter] public string AiDraft { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> AiDraftChanged { get; set; }
     [Parameter] public EventCallback<RightPanelMode> OnSelectMode { get; set; }
     [Parameter] public EventCallback OnToggleInspector { get; set; }
     [Parameter] public EventCallback<ReadableTryOperation> OnSelectOperation { get; set; }
     [Parameter] public EventCallback OnSendAiMessage { get; set; }
+    [Parameter] public EventCallback<string> OnApplyAiAction { get; set; }
+    [Parameter] public EventCallback<string> OnDismissAiAction { get; set; }
     [Parameter] public EventCallback OnSaveSettings { get; set; }
 
     private string DocsSummary => ViewMode == "preview"
@@ -208,17 +245,48 @@
         : "Current request context, response timings, and generated documentation.";
 
     private string BodySummary => string.IsNullOrWhiteSpace(BodyText)
-        ? "Empty"
-        : $"{BodyText.Length} chars";
+        ? T("empty")
+        : $"{BodyText.Length} {T("chars")}";
 
     private string ProxyLabel => ProxyMode switch
     {
-        ApiClientWorkspaceState.ProxyNone => "No proxy",
-        ApiClientWorkspaceState.ProxyCustom => "Custom proxy",
-        _ => "System proxy"
+        ApiClientWorkspaceState.ProxyNone => T("noProxy"),
+        ApiClientWorkspaceState.ProxyCustom => T("customProxy"),
+        _ => T("systemProxy")
     };
 
     private string PanelButtonClass(RightPanelMode mode) => Mode == mode ? "active" : string.Empty;
+
+    private static string ActionSafetyLabel(ReadableAiAction action)
+    {
+        return action.Confirmation.RequiresConfirmation
+            ? action.Confirmation.Safety.ToString()
+            : "ReadOnly";
+    }
+
+    private static IReadOnlyList<string> ActionChanges(ReadableAiRequestPatch patch)
+    {
+        var changes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(patch.Method))
+        {
+            changes.Add($"Method -> {patch.Method}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(patch.Url))
+        {
+            changes.Add($"URL -> {patch.Url}");
+        }
+
+        changes.AddRange(patch.QueryChanges.Select(change => $"Query {change.Name} = {change.SuggestedValue}"));
+        changes.AddRange(patch.HeaderChanges.Select(change => $"Header {change.Name} = {change.SuggestedValue}"));
+        changes.AddRange(patch.FormChanges.Select(change => $"Form {change.Name} = {change.SuggestedValue}"));
+        if (patch.BodyText is not null)
+        {
+            changes.Add($"Body -> {patch.BodyType ?? "Raw"}");
+        }
+
+        return changes;
+    }
 
     private async Task HandleAiDraftChanged(ChangeEventArgs args)
     {
@@ -258,5 +326,10 @@
     private async Task HandleLanguageChanged(ChangeEventArgs args)
     {
         await LanguageChanged.InvokeAsync(Convert.ToString(args.Value) ?? "system");
+    }
+
+    private async Task HandleFontSizeChanged(ChangeEventArgs args)
+    {
+        await FontSizeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.FontMedium);
     }
 }

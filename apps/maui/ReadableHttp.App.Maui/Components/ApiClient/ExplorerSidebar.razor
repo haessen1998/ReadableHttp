@@ -4,26 +4,31 @@
 <aside class="sidebar-panel" @onclick="CloseFlyouts">
     @if (HasOpenFlyout)
     {
-        <button class="sidebar-flyout-backdrop" title="Close menu" @onclick="CloseFlyouts"></button>
+        <button class="sidebar-flyout-backdrop" title="@T("close")" @onclick="CloseFlyouts"></button>
     }
 
     <header class="sidebar-brand">
-        <button class="brand-button" title="Toggle workspaces" @onclick="ToggleWorkspaceMenu">
-            <span class="brand-mark">R</span>
+        <button class="brand-button" title="@T("workspaces")" @onclick="ToggleWorkspaceMenu">
+            <span class="brand-mark" aria-hidden="true">
+                <span class="brand-node"></span>
+                <span class="brand-line long"></span>
+                <span class="brand-node"></span>
+                <span class="brand-line short"></span>
+            </span>
             <span class="brand-copy">
-                <strong>@(WorkspaceName ?? "No workspace")</strong>
+                <strong>@(WorkspaceName ?? T("noWorkspace"))</strong>
                 <small>@WorkspaceTypeLabel</small>
             </span>
         </button>
-        <button class="brand-toggle" title="Toggle workspaces" @onclick="ToggleWorkspaceMenu">@(workspaceMenuOpen ? "▾" : "▸")</button>
+        <button class="brand-toggle" title="@T("workspaces")" @onclick="ToggleWorkspaceMenu">@(workspaceMenuOpen ? "▾" : "▸")</button>
     </header>
 
     <section class="sidebar-search">
         <span>⌕</span>
-        <input value="@searchText" @oninput="HandleSearchChanged" placeholder="Search" />
+        <input value="@searchText" @oninput="HandleSearchChanged" placeholder="@T("search")" />
         @if (!string.IsNullOrWhiteSpace(searchText))
         {
-            <button title="Clear search" @onclick="ClearSearch">×</button>
+            <button title="@T("clearSearch")" @onclick="ClearSearch">×</button>
         }
     </section>
 
@@ -33,13 +38,13 @@
             <div class="block-title workspace-title">
                 <span class="section-toggle static">
                     <span>▾</span>
-                    <strong>Workspaces</strong>
+                    <strong>@T("workspaces")</strong>
                 </span>
                 <div class='@TitleActionsClass(MenuKey("add", "workspace"))' @onclick:stopPropagation="true">
-                    <button title="New workspace" @onclick='() => ToggleMore(MenuKey("add", "workspace"))'>＋</button>
+                    <button title="@T("newWorkspace")" @onclick='() => ToggleMore(MenuKey("add", "workspace"))'>＋</button>
                     <div class="more-menu">
-                        <button @onclick="OnNewWorkspace">Local workspace</button>
-                        <button @onclick="OnNewRemoteWorkspace">Remote workspace</button>
+                        <button @onclick="OnNewWorkspace">@T("localWorkspace")</button>
+                        <button @onclick="OnNewRemoteWorkspace">@T("remoteWorkspace")</button>
                     </div>
                 </div>
             </div>
@@ -56,26 +61,37 @@
                         <div class='@RowActionsClass(MenuKey("workspace", item))' @onclick:stopPropagation="true">
                             @if (!isUsableWorkspace)
                             {
-                                <button title="Remove unavailable workspace" @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))">×</button>
+                                <button title="@T("removeUnavailable")" @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))">×</button>
                             }
-                            <button title="More" @onclick='() => ToggleMore(MenuKey("workspace", item))'>···</button>
+                            <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("workspace", item))'>···</button>
                             <div class="more-menu">
                                 @if (isUsableWorkspace)
                                 {
-                                    <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Configure</button>
-                                    <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Open in Explorer</button>
+                                    <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))">@T("configure")</button>
+                                    <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))">@T("openInExplorer")</button>
                                     @if (isActiveWorkspace)
                                     {
-                                        <button @onclick="OnSaveWorkspace">Save</button>
+                                        <button @onclick="OnSaveWorkspace">@T("save")</button>
                                         @if (IsGitWorkspace)
                                         {
-                                            <button @onclick="OnGitStatus">Git status</button>
-                                            <button @onclick="OnGitPull">Git pull</button>
-                                            <button @onclick="OnGitPush">Git push</button>
+                                            <button @onclick="OnGitStatus">Git 状态</button>
+                                            <button @onclick="OnGitPull">拉取</button>
+                                            <button @onclick="OnGitPush">推送</button>
                                         }
                                     }
                                 }
-                                <button class="danger-menu" @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))">Remove from List</button>
+                                <button @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("delete")</span><span>@T("removeFromList")</span></button>
+                                @if (isUsableWorkspace)
+                                {
+                                    @if (string.Equals(pendingDeleteWorkspacePath, item, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button class="danger-menu" @onclick="() => ConfirmDeleteWorkspace(item)"><span class="fluent-icon">@Icon("delete")</span><span>@T("confirmDeleteWorkspace")</span></button>
+                                    }
+                                    else
+                                    {
+                                        <button class="danger-menu" @onclick="() => pendingDeleteWorkspacePath = item"><span class="fluent-icon">@Icon("delete")</span><span>@T("deleteWorkspaceFolder")</span></button>
+                                    }
+                                }
                             </div>
                         </div>
                     </div>
@@ -89,13 +105,18 @@
         <div class="block-title">
             <button class="section-toggle" @onclick="OnToggleCollectionsSection">
                 <span>@(ShowCollectionsSection ? "▾" : "▸")</span>
-                <strong>Collections</strong>
+                <strong>@T("collections")</strong>
             </button>
             @if (HasActiveWorkspace)
             {
-                <div class="title-actions">
-                    <button title="New collection" @onclick="OnNewCollection">＋</button>
-                    <button title="Reload collections" @onclick="OnLoadWorkspace">↻</button>
+                <div class='@TitleActionsClass(MenuKey("collections", "actions"))' @onclick:stopPropagation="true">
+                    <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("collections", "actions"))'>@Icon("more")</button>
+                    <div class="more-menu">
+                        <button @onclick="OnNewCollection"><span class="fluent-icon">@Icon("add")</span><span>@T("newCollection")</span></button>
+                        <button @onclick="OnLoadWorkspace"><span class="fluent-icon">@Icon("refresh")</span><span>@T("reloadCollections")</span></button>
+                        <button @onclick="OnShowCollectionsAbout"><span class="fluent-icon">@Icon("info")</span><span>@T("about")</span></button>
+                        @RenderSortMenu("collections")
+                    </div>
                 </div>
             }
         </div>
@@ -106,7 +127,7 @@
         else if (ShowCollectionsSection)
         {
             <div class="nav-list">
-                @foreach (var collection in FilteredCollections)
+                @foreach (var collection in SortedCollections)
                 {
                     <div @key="collection" class="collection-node">
                         <div class="@CollectionClass(collection)">
@@ -116,16 +137,14 @@
                                 <small>@CollectionBadge(collection)</small>
                             </button>
                             <div class='@RowActionsClass(MenuKey("collection", collection.Id))' @onclick:stopPropagation="true">
-                                <button title="New request" @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))">＋</button>
-                                <button title="More" @onclick='() => ToggleMore(MenuKey("collection", collection.Id))'>···</button>
+                                <button title="@T("newRequest")" @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))">＋</button>
+                                <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("collection", collection.Id))'>···</button>
                                 <div class="more-menu">
-                                    <button @onclick="() => OnOpenCollectionConfig.InvokeAsync(new CollectionEventArgs(collection))">Configure</button>
-                                    <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))">Open in Explorer</button>
-                                    @if (!IsLooseCollection(collection))
-                                    {
-                                        <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))">Duplicate</button>
-                                        <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))">Delete</button>
-                                    }
+                                    <button @onclick="() => OnOpenCollectionConfig.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
+                                    <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
+                                    @RenderSortMenu($"collection:{collection.Id}")
+                                    <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
+                                    <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
                                 </div>
                             </div>
                         </div>
@@ -134,9 +153,9 @@
                             <div class="request-children">
                                 @if (FilteredRequests(collection).Count == 0)
                                 {
-                                    <div class="request-empty">No matching requests</div>
+                                    <div class="request-empty">@T("noMatchingRequests")</div>
                                 }
-                                @foreach (var request in FilteredRequests(collection))
+                                @foreach (var request in SortedRequests(collection))
                                 {
                                     <div @key="request" class="@RequestRowClass(request)">
                                         <button class="request-main" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">
@@ -144,13 +163,25 @@
                                             <strong>@request.Name</strong>
                                         </button>
                                         <div class='@RowActionsClass(MenuKey("request", request.Id), "request-actions")' @onclick:stopPropagation="true">
-                                            <button title="Open" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">↗</button>
-                                            <button title="More" @onclick='() => ToggleMore(MenuKey("request", request.Id))'>···</button>
+                                            <button title="@T("open")" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">↗</button>
+                                            <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("request", request.Id))'>···</button>
                                             <div class="more-menu">
-                                                <button @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">Rename</button>
-                                                <button @onclick="() => OnDuplicateRequest.InvokeAsync(new RequestEventArgs(collection, request))">Duplicate</button>
-                                                <button @onclick="() => OnOpenRequestDefault.InvokeAsync(new RequestEventArgs(collection, request))">Open default</button>
-                                                <button class="danger-menu" @onclick="() => OnDeleteRequestItem.InvokeAsync(new RequestEventArgs(collection, request))">Delete</button>
+                                                <button @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("open")</span><span>@T("open")</span></button>
+                                                <button @onclick="() => OnDuplicateRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
+                                                <button @onclick="() => OnOpenRequestDefault.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("document")</span><span>@T("openDefault")</span></button>
+                                                @if (MoveTargetCollections(collection).Count > 0)
+                                                {
+                                                    <div class="menu-submenu">
+                                                        <button class="submenu-trigger" type="button">@T("moveTo")</button>
+                                                        <div class="submenu-panel">
+                                                            @foreach (var targetCollection in MoveTargetCollections(collection))
+                                                            {
+                                                                <button @key="targetCollection.Id" @onclick="() => OnMoveRequest.InvokeAsync(new RequestMoveEventArgs(collection, request, targetCollection))">@targetCollection.Name</button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                                <button class="danger-menu" @onclick="() => OnDeleteRequestItem.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
                                             </div>
                                         </div>
                                     </div>
@@ -167,28 +198,30 @@
         <div class="block-title">
             <button class="section-toggle" @onclick="OnToggleSpecsSection">
                 <span>@(ShowSpecsSection ? "▾" : "▸")</span>
-                <strong>Specifications</strong>
+                <strong>@T("specifications")</strong>
             </button>
             @if (HasActiveWorkspace)
             {
                 <div class='@TitleActionsClass(MenuKey("add", "specification"))' @onclick:stopPropagation="true">
-                    <button title="Add specification" @onclick='() => ToggleMore(MenuKey("add", "specification"))'>＋</button>
+                    <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("add", "specification"))'>@Icon("more")</button>
                     <div class="more-menu">
-                        <button @onclick="OnPickTryFile">Local file</button>
-                        <button @onclick="OnNewRemoteSpecification">Remote endpoint</button>
+                        <button @onclick="OnPickTryFile"><span class="fluent-icon">@Icon("document")</span><span>@T("localFile")</span></button>
+                        <button @onclick="OnNewRemoteSpecification"><span class="fluent-icon">@Icon("cloud")</span><span>@T("remoteEndpoint")</span></button>
+                        <button @onclick="OnLoadWorkspace"><span class="fluent-icon">@Icon("refresh")</span><span>@T("reloadSpecifications")</span></button>
+                        <button @onclick="OnShowSpecsAbout"><span class="fluent-icon">@Icon("info")</span><span>@T("about")</span></button>
+                        @RenderSortMenu("specs")
                     </div>
-                    <button title="Load current specification" @onclick="OnLoadTryDocument">↻</button>
                 </div>
             }
         </div>
         @if (ShowSpecsSection && FilteredSpecifications.Count == 0)
         {
-            <div class="empty-copy">Add a local or remote specification.</div>
+            <div class="empty-copy">@T("addSpecHint")</div>
         }
         else if (ShowSpecsSection)
         {
             <div class="nav-list">
-                @foreach (var specification in FilteredSpecifications)
+                @foreach (var specification in SortedSpecifications)
                 {
                     <div @key="specification" class="@SpecificationClass(specification)">
                         <button class="tree-main" @onclick="() => OnSelectSpecification.InvokeAsync(new SpecificationEventArgs(specification))">
@@ -198,14 +231,18 @@
                         <div class='@RowActionsClass(MenuKey("specification", specification.Id))' @onclick:stopPropagation="true">
                             @if (specification.SourceType == ReadableSpecificationSourceType.RemoteEndpoint)
                             {
-                                <button title="Refresh remote specification" @onclick="() => OnRefreshSpecification.InvokeAsync(new SpecificationEventArgs(specification))">↻</button>
+                                <button title="@T("refreshRemoteDocument")" @onclick="() => OnRefreshSpecification.InvokeAsync(new SpecificationEventArgs(specification))">↻</button>
                             }
-                            <button title="More" @onclick='() => ToggleMore(MenuKey("specification", specification.Id))'>···</button>
+                            <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("specification", specification.Id))'>···</button>
                             <div class="more-menu">
-                                <button @onclick="() => OnSelectSpecification.InvokeAsync(new SpecificationEventArgs(specification))">Rename</button>
-                                <button @onclick="() => OnDuplicateSpecification.InvokeAsync(new SpecificationEventArgs(specification))">Duplicate</button>
-                                <button @onclick="() => OnOpenSpecificationInExplorer.InvokeAsync(new SpecificationEventArgs(specification))">Open in Explorer</button>
-                                <button class="danger-menu" @onclick="() => OnDeleteSpecification.InvokeAsync(new SpecificationEventArgs(specification))">Delete</button>
+                                <button @onclick="() => OnOpenSpecificationConfig.InvokeAsync(new SpecificationEventArgs(specification))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
+                                @if (specification.SourceType == ReadableSpecificationSourceType.RemoteEndpoint)
+                                {
+                                    <button @onclick="() => OnRefreshSpecification.InvokeAsync(new SpecificationEventArgs(specification))"><span class="fluent-icon">@Icon("refresh")</span><span>@T("refreshRemoteDocument")</span></button>
+                                }
+                                <button @onclick="() => OnDuplicateSpecification.InvokeAsync(new SpecificationEventArgs(specification))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
+                                <button @onclick="() => OnOpenSpecificationInExplorer.InvokeAsync(new SpecificationEventArgs(specification))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
+                                <button class="danger-menu" @onclick="() => OnDeleteSpecification.InvokeAsync(new SpecificationEventArgs(specification))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
                             </div>
                         </div>
                     </div>
@@ -216,7 +253,7 @@
 
     <footer class="sidebar-env">
         <div class="workspace-quick-host" @onclick:stopPropagation="true">
-            <button class="workspace-quick-switch" title="Switch workspace" @onclick="ToggleQuickSwitch">
+            <button class="workspace-quick-switch" title="@T("switchWorkspace")" @onclick="ToggleQuickSwitch">
             <span>@(WorkspaceName ?? WorkspaceLabel(WorkspacePath))</span>
             <small>@WorkspaceTypeLabel</small>
             </button>
@@ -229,15 +266,15 @@
                             <span>@WorkspaceLabel(item)</span>
                             @if (!IsWorkspaceUsable(item))
                             {
-                                <small>Unavailable</small>
+                                <small>@T("unavailable")</small>
                             }
                         </button>
                     }
                 </div>
             }
         </div>
-        <button class="footer-button settings-button" title="Settings" @onclick="OnShowSettings">⚙</button>
-        <button class="footer-button" title="Hide sidebar" @onclick="OnToggleExplorer">◁</button>
+        <button class="footer-button settings-button" title="@T("settings")" @onclick="OnShowSettings">⚙</button>
+        <button class="footer-button" title="@T("hideSidebar")" @onclick="OnToggleExplorer">◁</button>
     </footer>
 </aside>
 
@@ -245,8 +282,12 @@
     private bool workspaceMenuOpen;
     private bool quickSwitchOpen;
     private string? openMenuKey;
+    private string? pendingDeleteWorkspacePath;
     private string searchText = string.Empty;
+    private string collectionsSort = "name";
+    private string specsSort = "name";
     private readonly HashSet<string> expandedCollectionIds = [];
+    private readonly Dictionary<string, string> requestSorts = [];
 
     [Parameter] public string WorkspacePath { get; set; } = string.Empty;
     [Parameter] public string WorkspaceStatus { get; set; } = string.Empty;
@@ -258,6 +299,7 @@
     [Parameter] public bool ShowRecentSection { get; set; }
     [Parameter] public bool WorkspaceAutoInitialize { get; set; }
     [Parameter] public IReadOnlyList<string> WorkspaceOptions { get; set; } = [];
+    [Parameter] public Func<string, string> T { get; set; } = static key => key;
     [Parameter] public IReadOnlyList<ReadableCollection> Collections { get; set; } = [];
     [Parameter] public ReadableCollection? SelectedCollection { get; set; }
     [Parameter] public ReadableRequest? SelectedRequest { get; set; }
@@ -279,6 +321,7 @@
     [Parameter] public EventCallback OnSaveWorkspace { get; set; }
     [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnOpenWorkspaceInExplorer { get; set; }
     [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnRemoveWorkspaceOption { get; set; }
+    [Parameter] public EventCallback<WorkspaceSelectedEventArgs> OnDeleteWorkspaceFolder { get; set; }
     [Parameter] public EventCallback OnDeleteCollection { get; set; }
     [Parameter] public EventCallback OnDeleteRequest { get; set; }
     [Parameter] public EventCallback OnGitStatus { get; set; }
@@ -290,6 +333,8 @@
     [Parameter] public EventCallback OnToggleCollectionsSection { get; set; }
     [Parameter] public EventCallback OnToggleSpecsSection { get; set; }
     [Parameter] public EventCallback OnToggleRecentSection { get; set; }
+    [Parameter] public EventCallback OnShowCollectionsAbout { get; set; }
+    [Parameter] public EventCallback OnShowSpecsAbout { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnSelectCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnOpenCollectionConfig { get; set; }
     [Parameter] public EventCallback<RequestEventArgs> OnSelectRequest { get; set; }
@@ -298,6 +343,7 @@
     [Parameter] public EventCallback<CollectionEventArgs> OnDeleteCollectionItem { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnOpenCollectionInExplorer { get; set; }
     [Parameter] public EventCallback<RequestEventArgs> OnDuplicateRequest { get; set; }
+    [Parameter] public EventCallback<RequestMoveEventArgs> OnMoveRequest { get; set; }
     [Parameter] public EventCallback<RequestEventArgs> OnDeleteRequestItem { get; set; }
     [Parameter] public EventCallback<RequestEventArgs> OnOpenRequestDefault { get; set; }
     [Parameter] public EventCallback OnShowRequest { get; set; }
@@ -307,6 +353,7 @@
     [Parameter] public EventCallback<SpecSelectedEventArgs> OnSelectSpec { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnSelectSpecification { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnRefreshSpecification { get; set; }
+    [Parameter] public EventCallback<SpecificationEventArgs> OnOpenSpecificationConfig { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnOpenSpecificationInExplorer { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnDuplicateSpecification { get; set; }
     [Parameter] public EventCallback<SpecificationEventArgs> OnDeleteSpecification { get; set; }
@@ -322,9 +369,9 @@
 
     private string Query => searchText.Trim();
 
-    private string WorkspaceTypeLabel => IsGitWorkspace ? "Git workspace" : "Local workspace";
+    private string WorkspaceTypeLabel => IsGitWorkspace ? T("gitWorkspace") : T("localWorkspace");
 
-    private string EmptyCollectionsText => IsSearching ? "No matching collections." : "Create or load a collection.";
+    private string EmptyCollectionsText => IsSearching ? T("noMatchingCollections") : T("createOrLoadCollection");
 
     private IReadOnlyList<string> FilteredWorkspaceOptions => WorkspaceOptions
         .Where(item => Matches(WorkspaceLabel(item)) || Matches(item))
@@ -334,6 +381,8 @@
         .Where(collection => Matches(collection.Name) || collection.Requests.Any(RequestMatches))
         .ToList();
 
+    private IReadOnlyList<ReadableCollection> SortedCollections => SortCollections(FilteredCollections).ToList();
+
     private IReadOnlyList<ReadableSpecification> FilteredSpecifications => Specifications
         .Where(specification => Matches(specification.Name)
             || Matches(specification.Path)
@@ -341,11 +390,56 @@
             || Matches(specification.SourceType.ToString()))
         .ToList();
 
+    private IReadOnlyList<ReadableSpecification> SortedSpecifications => SortSpecifications(FilteredSpecifications).ToList();
+
     private IReadOnlyList<ReadableRequest> FilteredRequests(ReadableCollection collection)
     {
         return collection.Requests
             .Where(RequestMatches)
             .ToList();
+    }
+
+    private IReadOnlyList<ReadableRequest> SortedRequests(ReadableCollection collection)
+    {
+        var sort = requestSorts.TryGetValue(collection.Id, out var value) ? value : "name";
+        return SortRequests(collection, FilteredRequests(collection), sort).ToList();
+    }
+
+    private IReadOnlyList<ReadableCollection> MoveTargetCollections(ReadableCollection source)
+    {
+        return Collections
+            .Where(collection => !string.Equals(collection.Id, source.Id, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private IEnumerable<ReadableCollection> SortCollections(IReadOnlyList<ReadableCollection> collections)
+    {
+        return collectionsSort switch
+        {
+            "size" => collections.OrderByDescending(collection => collection.Requests.Count).ThenBy(collection => collection.Name),
+            "updated" => collections.OrderByDescending(CollectionUpdatedAt).ThenBy(collection => collection.Name),
+            _ => collections.OrderBy(collection => collection.Name)
+        };
+    }
+
+    private IEnumerable<ReadableSpecification> SortSpecifications(IReadOnlyList<ReadableSpecification> specifications)
+    {
+        return specsSort switch
+        {
+            "size" => specifications.OrderByDescending(SpecificationSize).ThenBy(specification => specification.Name),
+            "updated" => specifications.OrderByDescending(SpecificationUpdatedAt).ThenBy(specification => specification.Name),
+            _ => specifications.OrderBy(specification => specification.Name)
+        };
+    }
+
+    private IEnumerable<ReadableRequest> SortRequests(ReadableCollection collection, IReadOnlyList<ReadableRequest> requests, string sort)
+    {
+        return sort switch
+        {
+            "size" => requests.OrderByDescending(request => RequestSize(collection, request)).ThenBy(request => request.Name),
+            "updated" => requests.OrderByDescending(request => RequestUpdatedAt(collection, request)).ThenBy(request => request.Name),
+            _ => requests.OrderBy(request => request.Name)
+        };
     }
 
     private bool RequestMatches(ReadableRequest request)
@@ -365,12 +459,14 @@
         workspaceMenuOpen = !workspaceMenuOpen;
         quickSwitchOpen = false;
         openMenuKey = null;
+        pendingDeleteWorkspacePath = null;
     }
 
     private void ToggleQuickSwitch()
     {
         quickSwitchOpen = !quickSwitchOpen;
         openMenuKey = null;
+        pendingDeleteWorkspacePath = null;
     }
 
     private async Task SelectWorkspaceFromQuickSwitch(string path)
@@ -393,12 +489,45 @@
     {
         quickSwitchOpen = false;
         openMenuKey = string.Equals(openMenuKey, key, StringComparison.Ordinal) ? null : key;
+        pendingDeleteWorkspacePath = null;
     }
+
+    private async Task ConfirmDeleteWorkspace(string path)
+    {
+        pendingDeleteWorkspacePath = null;
+        await OnDeleteWorkspaceFolder.InvokeAsync(new WorkspaceSelectedEventArgs(path));
+    }
+
+    private void SetSort(string scope, string sort)
+    {
+        if (scope == "collections")
+        {
+            collectionsSort = sort;
+        }
+        else if (scope == "specs")
+        {
+            specsSort = sort;
+        }
+        else if (scope.StartsWith("collection:", StringComparison.Ordinal))
+        {
+            requestSorts[scope["collection:".Length..]] = sort;
+        }
+    }
+
+    private RenderFragment RenderSortMenu(string scope) => @<div class="menu-submenu">
+        <button class="submenu-trigger" type="button"><span class="fluent-icon">@Icon("sort")</span><span>@T("sort")</span></button>
+        <div class="submenu-panel">
+            <button @onclick='() => SetSort(scope, "name")'><span class="fluent-icon">@Icon("text")</span><span>@T("sortByName")</span></button>
+            <button @onclick='() => SetSort(scope, "size")'><span class="fluent-icon">@Icon("size")</span><span>@T("sortBySize")</span></button>
+            <button @onclick='() => SetSort(scope, "updated")'><span class="fluent-icon">@Icon("clock")</span><span>@T("sortByUpdated")</span></button>
+        </div>
+    </div>;
 
     private void CloseFlyouts()
     {
         quickSwitchOpen = false;
         openMenuKey = null;
+        pendingDeleteWorkspacePath = null;
     }
 
     private void ClearSearch()
@@ -406,14 +535,12 @@
         searchText = string.Empty;
     }
 
-    private async Task ToggleCollection(ReadableCollection collection)
+    private void ToggleCollection(ReadableCollection collection)
     {
         if (!expandedCollectionIds.Add(collection.Id))
         {
             expandedCollectionIds.Remove(collection.Id);
         }
-
-        await OnSelectCollection.InvokeAsync(new CollectionEventArgs(collection));
     }
 
     private bool IsCollectionExpanded(ReadableCollection collection)
@@ -468,19 +595,14 @@
 
     private static string MenuKey(string scope, string id) => $"{scope}:{id}";
 
-    private static bool IsLooseCollection(ReadableCollection collection)
-    {
-        return collection.Id == "__loose_requests__";
-    }
-
     private static bool IsWorkspaceUsable(string path)
     {
         return !string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, "workspace.json"));
     }
 
-    private static string WorkspaceMainTitle(bool isUsable) => isUsable
-        ? "Load workspace"
-        : "Workspace unavailable";
+    private string WorkspaceMainTitle(bool isUsable) => isUsable
+        ? T("switchWorkspace")
+        : T("workspaceUnavailableHint");
 
     private string CollectionClass(ReadableCollection collection)
     {
@@ -524,12 +646,14 @@
         return string.IsNullOrWhiteSpace(name) ? path : name;
     }
 
-    private static string CollectionBadge(ReadableCollection collection)
+    private string CollectionBadge(ReadableCollection collection)
     {
-        return collection.Requests.Count == 1 ? "1 request" : $"{collection.Requests.Count} requests";
+        return collection.Requests.Count == 1
+            ? $"1 {T("requestLower")}"
+            : $"{collection.Requests.Count} {T("requestsLower")}";
     }
 
-    private static string SpecificationBadge(ReadableSpecification specification)
+    private string SpecificationBadge(ReadableSpecification specification)
     {
         var format = specification.Format == ReadableSpecificationFormat.Unknown && !string.IsNullOrWhiteSpace(specification.Path)
             ? Path.GetExtension(specification.Path).TrimStart('.').ToUpperInvariant()
@@ -538,8 +662,101 @@
         {
             ReadableSpecificationSourceType.RemoteEndpoint => "Remote",
             ReadableSpecificationSourceType.GitFile => "Git",
-            _ => "Local"
+            _ => T("local")
         };
         return string.IsNullOrWhiteSpace(format) ? source : $"{source} · {format}";
+    }
+
+    private DateTime CollectionUpdatedAt(ReadableCollection collection)
+    {
+        var directory = CollectionDirectory(collection);
+        return Directory.Exists(directory) ? Directory.GetLastWriteTimeUtc(directory) : DateTime.MinValue;
+    }
+
+    private long SpecificationSize(ReadableSpecification specification)
+    {
+        var path = SpecificationPathFor(specification);
+        return File.Exists(path) ? new FileInfo(path).Length : 0L;
+    }
+
+    private DateTime SpecificationUpdatedAt(ReadableSpecification specification)
+    {
+        var path = SpecificationPathFor(specification);
+        return File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+    }
+
+    private long RequestSize(ReadableCollection collection, ReadableRequest request)
+    {
+        var path = RequestPath(collection, request);
+        return File.Exists(path) ? new FileInfo(path).Length : 0L;
+    }
+
+    private DateTime RequestUpdatedAt(ReadableCollection collection, ReadableRequest request)
+    {
+        var path = RequestPath(collection, request);
+        return File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+    }
+
+    private string CollectionDirectory(ReadableCollection collection)
+    {
+        return string.IsNullOrWhiteSpace(collection.RequestDirectory)
+            ? Path.Combine(WorkspacePath, "collections", ToFileName(collection.Name))
+            : Path.Combine(WorkspacePath, collection.RequestDirectory);
+    }
+
+    private string RequestPath(ReadableCollection collection, ReadableRequest request)
+    {
+        return string.IsNullOrWhiteSpace(request.SourcePath)
+            ? Path.Combine(CollectionDirectory(collection), $"{ToFileName(request.Name)}.json")
+            : Path.Combine(WorkspacePath, request.SourcePath);
+    }
+
+    private string SpecificationPathFor(ReadableSpecification specification)
+    {
+        if (!string.IsNullOrWhiteSpace(specification.Path))
+        {
+            return Path.IsPathRooted(specification.Path)
+                ? specification.Path
+                : Path.Combine(WorkspacePath, specification.Path);
+        }
+
+        if (!string.IsNullOrWhiteSpace(specification.NormalizedPath))
+        {
+            return Path.IsPathRooted(specification.NormalizedPath)
+                ? specification.NormalizedPath
+                : Path.Combine(WorkspacePath, specification.NormalizedPath);
+        }
+
+        return string.Empty;
+    }
+
+    private static string ToFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value.Select(character => invalid.Contains(character) ? '-' : character).ToArray());
+        return string.IsNullOrWhiteSpace(sanitized) ? "item" : sanitized;
+    }
+
+    private static string Icon(string name)
+    {
+        return name switch
+        {
+            "add" => "\uE710",
+            "refresh" => "\uE72C",
+            "info" => "\uE946",
+            "sort" => "\uE8CB",
+            "copy" => "\uE8C8",
+            "delete" => "\uE74D",
+            "open" => "\uE8A7",
+            "folder" => "\uE8B7",
+            "settings" => "\uE713",
+            "document" => "\uE8A5",
+            "cloud" => "\uE753",
+            "text" => "\uE8D2",
+            "size" => "\uE8B3",
+            "clock" => "\uE823",
+            "more" => "\uE712",
+            _ => "\uE712"
+        };
     }
 }

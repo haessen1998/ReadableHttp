@@ -1,7 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
-        <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+        <TargetFrameworks Condition="'$(TargetFrameworks)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
+        <TargetFrameworks Condition="'$(TargetFrameworks)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">net10.0-maccatalyst</TargetFrameworks>
+        <TargetFrameworks Condition="'$(TargetFrameworks)' == ''">net10.0-windows10.0.19041.0</TargetFrameworks>
 
         <!-- Note for MacCatalyst:
             The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
@@ -27,7 +29,7 @@
         <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
         <!-- Display name -->
-        <ApplicationTitle>ReadableHttp.App.Maui</ApplicationTitle>
+        <ApplicationTitle>ReadableHttp</ApplicationTitle>
 
         <!-- App Identifier -->
         <ApplicationId>com.companyname.readablehttp.app.maui</ApplicationId>
@@ -48,10 +50,10 @@
 
     <ItemGroup>
         <!-- App Icon -->
-        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#0F766E" />
 
         <!-- Splash Screen -->
-        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#0F766E" BaseSize="128,128" />
 
         <!-- Images -->
         <MauiImage Include="Resources\Images\*" />
@@ -73,6 +75,8 @@
         <ProjectReference Include="..\..\..\src\ReadableHttp\ReadableHttp.csproj" />
         <ProjectReference Include="..\..\supports\ReadableHttp.Storage\ReadableHttp.Storage.csproj" />
         <ProjectReference Include="..\..\supports\ReadableHttp.Try\ReadableHttp.Try.csproj" />
+        <ProjectReference Include="..\..\supports\ReadableHttp.AI\ReadableHttp.AI.csproj" />
+        <ProjectReference Include="..\..\supports\ReadableHttp.AI.MAF\ReadableHttp.AI.MAF.csproj" />
     </ItemGroup>
 
 </Project>

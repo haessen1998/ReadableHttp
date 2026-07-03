@@ -5,13 +5,31 @@ body,
     margin: 0;
 }
 
+@font-face {
+    font-family: "SegoeUIWeb";
+    src: url("../fonts/Segoe%20UI.ttf") format("truetype");
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "SegMDL2Web";
+    src: url("../fonts/SegMDL2.ttf") format("truetype");
+    font-display: block;
+}
+
+@font-face {
+    font-family: "SegoeFluentIconsWeb";
+    src: url("../fonts/Segoe%20Fluent%20Icons.ttf") format("truetype");
+    font-display: block;
+}
+
 html {
     color-scheme: dark;
 }
 
 body {
     overflow: hidden;
-    font-family: "OpenSansRegular", "Segoe UI", Arial, sans-serif;
+    font-family: "SegoeUIWeb", "SegoeUI", "OpenSansRegular", "Segoe UI", Arial, sans-serif;
     background: #101217;
     color: #d8dee9;
 }
@@ -83,6 +101,19 @@ textarea:focus-visible {
     --sidebar-width: clamp(236px, 20vw, 320px);
     --inspector-width: clamp(292px, 24vw, 420px);
     --control-radius: 5px;
+    --font-scale: 1;
+    --font-8: 8px;
+    --font-9: 9px;
+    --font-10: 10px;
+    --font-11: 11px;
+    --font-12: 12px;
+    --font-13: 13px;
+    --font-14: 14px;
+    --font-15: 15px;
+    --font-18: 18px;
+    --font-20: 20px;
+    --icon-font: "SegMDL2Web", "SegoeFluentIconsWeb", "Segoe Fluent Icons", "Segoe MDL2 Assets", "Segoe UI Symbol", sans-serif;
+    font-size: var(--font-13);
     display: grid;
     grid-template-rows: minmax(0, 1fr);
     height: 100%;
@@ -93,6 +124,38 @@ textarea:focus-visible {
         var(--bg);
     color: var(--text);
     position: relative;
+}
+
+.api-client-shell.font-small {
+    --font-scale: 0.9;
+    --font-8: 7px;
+    --font-9: 8px;
+    --font-10: 9px;
+    --font-11: 10px;
+    --font-12: 11px;
+    --font-13: 12px;
+    --font-14: 13px;
+    --font-15: 14px;
+    --font-18: 16px;
+    --font-20: 18px;
+}
+
+.api-client-shell.font-medium {
+    --font-scale: 1;
+}
+
+.api-client-shell.font-large {
+    --font-scale: 1.18;
+    --font-8: 10px;
+    --font-9: 11px;
+    --font-10: 12px;
+    --font-11: 13px;
+    --font-12: 14px;
+    --font-13: 15px;
+    --font-14: 16px;
+    --font-15: 18px;
+    --font-18: 21px;
+    --font-20: 24px;
 }
 
 .api-client-shell.theme-light {
@@ -116,6 +179,40 @@ textarea:focus-visible {
     --shadow: 0 18px 44px rgba(42, 55, 80, 0.16);
 }
 
+.api-client-shell .icon-button,
+.api-client-shell .footer-button,
+.api-client-shell .edge-toggle,
+.api-client-shell .row-actions > button,
+.api-client-shell .title-actions > button,
+.api-client-shell .new-tab-button,
+.api-client-shell .open-request-tab i {
+    font-family: var(--icon-font);
+}
+
+.api-client-shell :is(button, input, select, textarea) {
+    font-size: var(--font-13);
+}
+
+.api-client-shell :is(.brand-copy strong, .item-main, .request-main strong, .workspace-main span:last-child, .more-menu button, .submenu-panel button, .pane-header h2, .swagger-title h1, .doc-overview strong) {
+    font-size: var(--font-13) !important;
+}
+
+.api-client-shell :is(.brand-copy small, .muted-line, .empty-copy, .request-empty, .pane-header span, .settings-section p, .config-section p, .form-body-note, .doc-overview span, .doc-overview p) {
+    font-size: var(--font-12) !important;
+}
+
+.api-client-shell :is(.block-title, .settings-page > header span, .config-page > header span, .config-field > span, .settings-section label, .config-section label, .request-form label) {
+    font-size: var(--font-12) !important;
+}
+
+.api-client-shell :is(.tree-row small, .sidebar-search span, .sidebar-search input, .right-panel-tabs button, .panel-title span, .doc-block h3, .response-crumbs button, .response-crumbs span, .response-meta-line span, .pipeline-heading, .pipeline-empty, .swagger-search input, .swagger-links button, .endpoint-path, .endpoint-name, .endpoint-section > span, .spec-table, .response-list span, .endpoint-actions button) {
+    font-size: var(--font-10) !important;
+}
+
+.api-client-shell :is(.fluent-icon, .footer-button, .settings-button) {
+    font-size: var(--font-15) !important;
+}
+
 .client-workbench {
     display: flex;
     min-height: 0;
@@ -125,6 +222,11 @@ textarea:focus-visible {
     border: 1px solid var(--line-soft);
     background: var(--surface);
     box-shadow: var(--shadow);
+}
+
+.client-workbench:has(.sidebar-panel .row-actions.open),
+.client-workbench:has(.sidebar-panel .title-actions.open) {
+    overflow: visible;
 }
 
 .edge-toggle {
@@ -138,7 +240,7 @@ textarea:focus-visible {
     border: 1px solid var(--line);
     background: var(--panel);
     color: var(--accent);
-    font-size: 20px;
+    font-size: var(--font-20);
     transform: translateY(-50%);
     box-shadow: var(--shadow);
 }
@@ -174,7 +276,7 @@ textarea:focus-visible {
 .method {
     border-radius: var(--control-radius);
     color: #ffffff;
-    font-size: 12px;
+    font-size: var(--font-12);
     font-weight: 700;
     padding: 4px 8px;
     text-align: center;
@@ -182,7 +284,7 @@ textarea:focus-visible {
 
 .method.tiny {
     border-radius: 3px;
-    font-size: 8px;
+    font-size: var(--font-8);
     padding: 2px 4px;
 }
 

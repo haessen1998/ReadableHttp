@@ -8,6 +8,10 @@ public sealed record PipelinePhase(string Label, int Width, string Color, string
 
 public sealed record AiChatMessage(string Role, string Content);
 
+public sealed record EditableNameValueChange(string Kind, int Index, string Field, string? Value);
+
+public sealed record VariableChange(string Scope, int Index, string Field, string? Value);
+
 public sealed record AppSettingsDraft(
     string ThemeMode = "system",
     string ProxyMode = "system",
@@ -15,6 +19,7 @@ public sealed record AppSettingsDraft(
     string CustomProxyUsername = "",
     string CustomProxyPassword = "",
     string Language = "system",
+    string FontSize = "medium",
     bool DevToolsEnabled = true);
 
 public enum RequestTabOrigin
@@ -26,6 +31,7 @@ public enum RequestTabOrigin
     Specification,
     SpecificationConfig,
     SpecificationDocument,
+    About,
     Settings
 }
 
@@ -50,6 +56,16 @@ public sealed class RequestWorkspaceTab
     public string Url { get; set; } = "https://httpbin.org/get";
 
     public string BodyText { get; set; } = string.Empty;
+
+    public ReadableBodyType BodyType { get; set; } = ReadableBodyType.None;
+
+    public string BodyContentType { get; set; } = string.Empty;
+
+    public List<ReadableNameValue> Query { get; set; } = [];
+
+    public List<ReadableNameValue> Headers { get; set; } = [];
+
+    public List<ReadableNameValue> Form { get; set; } = [];
 
     public string StatusText { get; set; } = "Ready";
 
@@ -83,5 +99,7 @@ public sealed record ResponseNodeSelectedEventArgs(string Path);
 public sealed record CollectionEventArgs(ReadableCollection Collection);
 
 public sealed record RequestEventArgs(ReadableCollection Collection, ReadableRequest Request);
+
+public sealed record RequestMoveEventArgs(ReadableCollection SourceCollection, ReadableRequest Request, ReadableCollection TargetCollection);
 
 public sealed record SpecificationEventArgs(ReadableSpecification Specification);

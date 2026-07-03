@@ -8,6 +8,6 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
     <PackageTags>http;api;rest;sdk</PackageTags>
-    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;.artifacts\**;.build\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;artifacts\**;.artifacts\**;.build\**</DefaultItemExcludes>
   </PropertyGroup>
 </Project>
