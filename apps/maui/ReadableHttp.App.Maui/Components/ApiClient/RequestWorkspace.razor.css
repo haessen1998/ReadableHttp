@@ -214,13 +214,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
     height: 34px;
     border: 1px solid transparent;
     border-radius: 7px;
     background: var(--accent);
     color: #ffffff;
-    padding: 0 14px;
+    min-width: 76px;
+    padding: 0 16px;
     font-size: 12px;
     font-weight: 700;
 }
@@ -532,7 +532,7 @@
 
 .request-canvas {
     display: grid;
-    grid-template-rows: 42px auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     padding: 0;
 }
 
@@ -550,6 +550,8 @@
     gap: 2px;
     border-bottom: 1px solid var(--line);
     background: var(--panel);
+    min-width: 0;
+    overflow-x: auto;
     padding: 0 12px;
 }
 
@@ -651,16 +653,52 @@
 }
 
 .request-config {
-    max-height: 172px;
     overflow: auto;
     border-bottom: 1px solid var(--line);
     background: var(--panel);
-    padding: 8px 12px;
+    padding: 10px 12px;
 }
 
 .request-form {
     display: grid;
+    gap: 10px;
+}
+
+.request-info-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+}
+
+.request-info-actions {
+    display: flex;
+    align-items: center;
     gap: 8px;
+}
+
+.field-line {
+    display: grid;
+    gap: 5px;
+    color: var(--muted);
+    font-size: calc(11px * var(--font-scale));
+}
+
+.field-line input,
+.field-line select {
+    min-height: 30px;
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--code-bg) 76%, transparent);
+    color: var(--text);
+    padding: 5px 8px;
+    font: inherit;
+}
+
+.field-line input:focus,
+.field-line select:focus {
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+    outline: 0;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .param-table {
@@ -706,7 +744,7 @@
 
 .name-value-editor {
     display: grid;
-    gap: 6px;
+    gap: 8px;
 }
 
 .name-value-actions {
@@ -758,13 +796,6 @@
     margin-bottom: 8px;
 }
 
-.body-settings label {
-    display: grid;
-    gap: 4px;
-    color: var(--muted-2);
-    font-size: calc(11px * var(--font-scale));
-}
-
 .body-settings input,
 .body-settings select {
     border: 1px solid rgba(148, 163, 184, 0.22);
@@ -812,9 +843,63 @@
     color: color-mix(in srgb, var(--accent-2) 85%, var(--text));
 }
 
+.section-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.section-heading-row h2 {
+    margin: 0;
+}
+
+.environment-list {
+    display: grid;
+    gap: 12px;
+}
+
+.environment-editor {
+    display: grid;
+    gap: 10px;
+    border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--panel-2) 58%, transparent);
+    padding: 10px;
+}
+
+.environment-editor-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.mini-danger-button {
+    min-height: 30px;
+    border: 1px solid color-mix(in srgb, #ef4444 36%, var(--line));
+    border-radius: 5px;
+    background: color-mix(in srgb, #ef4444 8%, transparent);
+    color: color-mix(in srgb, #ef4444 82%, var(--text));
+    padding: 0 10px;
+    font: inherit;
+}
+
+.auth-editor {
+    display: grid;
+    gap: 12px;
+}
+
+.auth-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+}
+
 .split-editor {
     display: grid;
-    grid-template-columns: minmax(260px, 42%) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 48%) minmax(0, 1fr);
     gap: 0;
     min-height: 0;
     padding-top: 0;
@@ -822,7 +907,7 @@
 
 .editor-pane {
     display: grid;
-    grid-template-rows: 38px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     min-width: 0;
     min-height: 0;
     border: 1px solid var(--line);
@@ -832,8 +917,12 @@
     overflow: hidden;
 }
 
+.request-pane {
+    grid-template-rows: 42px auto minmax(0, 1fr);
+}
+
 .response-pane {
-    grid-template-rows: 38px auto minmax(0, 1fr);
+    grid-template-rows: 42px auto minmax(0, 1fr);
 }
 
 .pane-header {
@@ -848,6 +937,16 @@
 .response-meta-line {
     gap: 6px;
     min-width: 0;
+}
+
+.response-crumbs {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+}
+
+.response-meta-line {
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 .response-crumbs button {
@@ -896,15 +995,33 @@
     width: 28px;
     height: 28px;
     place-items: center;
-    border: 1px solid transparent;
+    border: 1px solid var(--line-soft);
     border-radius: 4px;
-    background: transparent;
+    background: var(--panel-2);
     color: var(--muted);
 }
 
 .pane-tool-button:hover {
     border-color: var(--line-soft);
     background: color-mix(in srgb, var(--accent) 9%, transparent);
+    color: var(--accent);
+}
+
+.copy-response-button {
+    width: 28px;
+    height: 24px;
+}
+
+.wrap-response-button {
+    width: 28px;
+    height: 24px;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 13px;
+}
+
+.wrap-response-button.active {
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
     color: var(--accent);
 }
 
@@ -924,6 +1041,10 @@ textarea,
     overflow: auto;
     resize: none;
     white-space: pre-wrap;
+}
+
+.request-body-textarea {
+    border-top: 1px solid var(--line-soft);
 }
 
 .response-pipeline {
@@ -1036,6 +1157,14 @@ textarea,
 
 .response-body pre {
     min-height: 0;
+    white-space: pre;
+    overflow-wrap: normal;
+}
+
+.response-body.wrap-response pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .response-empty {
@@ -1078,10 +1207,19 @@ textarea,
     }
 
     .request-canvas {
-        grid-template-rows: 36px auto minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
     }
 
     .split-editor {
+        grid-template-columns: 1fr;
+    }
+
+    .auth-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .request-info-form,
+    .environment-editor-header {
         grid-template-columns: 1fr;
     }
 }

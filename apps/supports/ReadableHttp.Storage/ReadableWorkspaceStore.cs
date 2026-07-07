@@ -79,10 +79,7 @@ public sealed class ReadableWorkspaceStore
         }
 
         var requests = new List<ReadableRequest>();
-        var searchOption = IsCollectionsRoot(workspacePath, requestDirectory)
-            ? SearchOption.TopDirectoryOnly
-            : SearchOption.AllDirectories;
-        foreach (var file in Directory.EnumerateFiles(requestDirectory, "*.json", searchOption))
+        foreach (var file in Directory.EnumerateFiles(requestDirectory, "*.json", SearchOption.TopDirectoryOnly))
         {
             var request = await TryLoadRequestAsync(file, cancellationToken);
             if (request is not null)
@@ -483,12 +480,18 @@ public sealed class ReadableWorkspaceStore
     {
         var json = JsonSerializer.Serialize(workspace, ReadableHttpJsonStorage.JsonOptions);
         var snapshot = JsonSerializer.Deserialize<ReadableWorkspace>(json, ReadableHttpJsonStorage.JsonOptions) ?? new ReadableWorkspace();
-        foreach (var collection in snapshot.Collections)
-        {
-            collection.Requests.Clear();
-        }
+        ClearCollectionRequests(snapshot.Collections);
 
         return snapshot;
+    }
+
+    private static void ClearCollectionRequests(IEnumerable<ReadableCollection> collections)
+    {
+        foreach (var collection in collections)
+        {
+            collection.Requests.Clear();
+            ClearCollectionRequests(collection.Children);
+        }
     }
 
     private static string? ResolveExistingRequestPath(
@@ -506,11 +509,8 @@ public sealed class ReadableWorkspaceStore
             }
         }
 
-        var searchOption = IsCollectionsRoot(workspacePath, requestDirectory)
-            ? SearchOption.TopDirectoryOnly
-            : SearchOption.AllDirectories;
         var files = Directory.Exists(requestDirectory)
-            ? Directory.EnumerateFiles(requestDirectory, "*.json", searchOption)
+            ? Directory.EnumerateFiles(requestDirectory, "*.json", SearchOption.TopDirectoryOnly)
             : Enumerable.Empty<string>();
         foreach (var file in files)
         {

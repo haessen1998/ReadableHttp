@@ -7,7 +7,6 @@
         <button class="@PanelButtonClass(RightPanelMode.Ai)" title="AI 对话" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Ai)">AI</button>
         <button class="@PanelButtonClass(RightPanelMode.Parameters)" title="@T("parameters")" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Parameters)">Params</button>
         <button class="@PanelButtonClass(RightPanelMode.Settings)" title="@T("settings")" @onclick="() => OnSelectMode.InvokeAsync(RightPanelMode.Settings)">Set</button>
-        <button class="collapse-button" title="@T("hidePanel")" @onclick="OnToggleInspector">×</button>
     </nav>
 
     @if (Mode == RightPanelMode.Docs)
@@ -233,7 +232,6 @@
     [Parameter] public string AiDraft { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> AiDraftChanged { get; set; }
     [Parameter] public EventCallback<RightPanelMode> OnSelectMode { get; set; }
-    [Parameter] public EventCallback OnToggleInspector { get; set; }
     [Parameter] public EventCallback<ReadableTryOperation> OnSelectOperation { get; set; }
     [Parameter] public EventCallback OnSendAiMessage { get; set; }
     [Parameter] public EventCallback<string> OnApplyAiAction { get; set; }

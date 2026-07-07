@@ -8,7 +8,7 @@
     }
 
     <header class="sidebar-brand">
-        <button class="brand-button" title="@T("workspaces")" @onclick="ToggleWorkspaceMenu">
+        <div class="brand-button" title="@WorkspaceName">
             <span class="brand-mark" aria-hidden="true">
                 <span class="brand-node"></span>
                 <span class="brand-line long"></span>
@@ -19,8 +19,7 @@
                 <strong>@(WorkspaceName ?? T("noWorkspace"))</strong>
                 <small>@WorkspaceTypeLabel</small>
             </span>
-        </button>
-        <button class="brand-toggle" title="@T("workspaces")" @onclick="ToggleWorkspaceMenu">@(workspaceMenuOpen ? "▾" : "▸")</button>
+        </div>
     </header>
 
     <section class="sidebar-search">
@@ -32,75 +31,6 @@
         }
     </section>
 
-    @if (workspaceMenuOpen)
-    {
-        <section class="workspace-menu">
-            <div class="block-title workspace-title">
-                <span class="section-toggle static">
-                    <span>▾</span>
-                    <strong>@T("workspaces")</strong>
-                </span>
-                <div class='@TitleActionsClass(MenuKey("add", "workspace"))' @onclick:stopPropagation="true">
-                    <button title="@T("newWorkspace")" @onclick='() => ToggleMore(MenuKey("add", "workspace"))'>＋</button>
-                    <div class="more-menu">
-                        <button @onclick="OnNewWorkspace">@T("localWorkspace")</button>
-                        <button @onclick="OnNewRemoteWorkspace">@T("remoteWorkspace")</button>
-                    </div>
-                </div>
-            </div>
-            <div class="workspace-list">
-                @foreach (var item in FilteredWorkspaceOptions)
-                {
-                    var isActiveWorkspace = string.Equals(WorkspacePath, item, StringComparison.OrdinalIgnoreCase);
-                    var isUsableWorkspace = IsWorkspaceUsable(item);
-                    <div @key="item" class="@WorkspaceClass(item)">
-                        <button class="workspace-main" title="@WorkspaceMainTitle(isUsableWorkspace)" @onclick="() => SelectWorkspaceIfUsable(item)">
-                            <span class="check-mark"></span>
-                            <span>@WorkspaceLabel(item)</span>
-                        </button>
-                        <div class='@RowActionsClass(MenuKey("workspace", item))' @onclick:stopPropagation="true">
-                            @if (!isUsableWorkspace)
-                            {
-                                <button title="@T("removeUnavailable")" @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))">×</button>
-                            }
-                            <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("workspace", item))'>···</button>
-                            <div class="more-menu">
-                                @if (isUsableWorkspace)
-                                {
-                                    <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))">@T("configure")</button>
-                                    <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))">@T("openInExplorer")</button>
-                                    @if (isActiveWorkspace)
-                                    {
-                                        <button @onclick="OnSaveWorkspace">@T("save")</button>
-                                        @if (IsGitWorkspace)
-                                        {
-                                            <button @onclick="OnGitStatus">Git 状态</button>
-                                            <button @onclick="OnGitPull">拉取</button>
-                                            <button @onclick="OnGitPush">推送</button>
-                                        }
-                                    }
-                                }
-                                <button @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("delete")</span><span>@T("removeFromList")</span></button>
-                                @if (isUsableWorkspace)
-                                {
-                                    @if (string.Equals(pendingDeleteWorkspacePath, item, StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        <button class="danger-menu" @onclick="() => ConfirmDeleteWorkspace(item)"><span class="fluent-icon">@Icon("delete")</span><span>@T("confirmDeleteWorkspace")</span></button>
-                                    }
-                                    else
-                                    {
-                                        <button class="danger-menu" @onclick="() => pendingDeleteWorkspacePath = item"><span class="fluent-icon">@Icon("delete")</span><span>@T("deleteWorkspaceFolder")</span></button>
-                                    }
-                                }
-                            </div>
-                        </div>
-                    </div>
-                }
-            </div>
-            <span class="muted-line">@WorkspaceStatus</span>
-        </section>
-    }
-
     <section class="nav-block">
         <div class="block-title">
             <button class="section-toggle" @onclick="OnToggleCollectionsSection">
@@ -110,85 +40,31 @@
             @if (HasActiveWorkspace)
             {
                 <div class='@TitleActionsClass(MenuKey("collections", "actions"))' @onclick:stopPropagation="true">
-                    <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("collections", "actions"))'>@Icon("more")</button>
+                    <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("collections", "actions"))'>···</button>
                     <div class="more-menu">
                         <button @onclick="OnNewCollection"><span class="fluent-icon">@Icon("add")</span><span>@T("newCollection")</span></button>
                         <button @onclick="OnLoadWorkspace"><span class="fluent-icon">@Icon("refresh")</span><span>@T("reloadCollections")</span></button>
+                        <button @onclick="CollapseAllCollections"><span class="fluent-icon">@Icon("collapse")</span><span>@T("collapseAll")</span></button>
                         <button @onclick="OnShowCollectionsAbout"><span class="fluent-icon">@Icon("info")</span><span>@T("about")</span></button>
                         @RenderSortMenu("collections")
                     </div>
                 </div>
             }
         </div>
-        @if (ShowCollectionsSection && FilteredCollections.Count == 0)
+        @if (ShowCollectionsSection && !HasVisibleCollectionContent)
         {
             <div class="empty-copy">@EmptyCollectionsText</div>
         }
         else if (ShowCollectionsSection)
         {
             <div class="nav-list">
-                @foreach (var collection in SortedCollections)
+                @if (RootCollection is not null)
                 {
-                    <div @key="collection" class="collection-node">
-                        <div class="@CollectionClass(collection)">
-                            <button class="tree-main" @onclick="() => ToggleCollection(collection)">
-                                <span class="tree-caret">@(IsCollectionExpanded(collection) ? "▾" : "▸")</span>
-                                <span class="item-main">@collection.Name</span>
-                                <small>@CollectionBadge(collection)</small>
-                            </button>
-                            <div class='@RowActionsClass(MenuKey("collection", collection.Id))' @onclick:stopPropagation="true">
-                                <button title="@T("newRequest")" @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))">＋</button>
-                                <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("collection", collection.Id))'>···</button>
-                                <div class="more-menu">
-                                    <button @onclick="() => OnOpenCollectionConfig.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
-                                    <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
-                                    @RenderSortMenu($"collection:{collection.Id}")
-                                    <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
-                                    <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
-                                </div>
-                            </div>
-                        </div>
-                        @if (IsCollectionExpanded(collection) || IsSearching)
-                        {
-                            <div class="request-children">
-                                @if (FilteredRequests(collection).Count == 0)
-                                {
-                                    <div class="request-empty">@T("noMatchingRequests")</div>
-                                }
-                                @foreach (var request in SortedRequests(collection))
-                                {
-                                    <div @key="request" class="@RequestRowClass(request)">
-                                        <button class="request-main" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">
-                                            <span class="method tiny @request.Method.ToLowerInvariant()">@request.Method</span>
-                                            <strong>@request.Name</strong>
-                                        </button>
-                                        <div class='@RowActionsClass(MenuKey("request", request.Id), "request-actions")' @onclick:stopPropagation="true">
-                                            <button title="@T("open")" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">↗</button>
-                                            <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("request", request.Id))'>···</button>
-                                            <div class="more-menu">
-                                                <button @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("open")</span><span>@T("open")</span></button>
-                                                <button @onclick="() => OnDuplicateRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
-                                                <button @onclick="() => OnOpenRequestDefault.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("document")</span><span>@T("openDefault")</span></button>
-                                                @if (MoveTargetCollections(collection).Count > 0)
-                                                {
-                                                    <div class="menu-submenu">
-                                                        <button class="submenu-trigger" type="button">@T("moveTo")</button>
-                                                        <div class="submenu-panel">
-                                                            @foreach (var targetCollection in MoveTargetCollections(collection))
-                                                            {
-                                                                <button @key="targetCollection.Id" @onclick="() => OnMoveRequest.InvokeAsync(new RequestMoveEventArgs(collection, request, targetCollection))">@targetCollection.Name</button>
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                }
-                                                <button class="danger-menu" @onclick="() => OnDeleteRequestItem.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
+                    @RenderCollectionRequests(RootCollection, isRoot: true)
+                }
+                @foreach (var collection in SortedRootCollections)
+                {
+                    @RenderCollectionNode(collection)
                 }
             </div>
         }
@@ -203,7 +79,7 @@
             @if (HasActiveWorkspace)
             {
                 <div class='@TitleActionsClass(MenuKey("add", "specification"))' @onclick:stopPropagation="true">
-                    <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("add", "specification"))'>@Icon("more")</button>
+                    <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("add", "specification"))'>···</button>
                     <div class="more-menu">
                         <button @onclick="OnPickTryFile"><span class="fluent-icon">@Icon("document")</span><span>@T("localFile")</span></button>
                         <button @onclick="OnNewRemoteSpecification"><span class="fluent-icon">@Icon("cloud")</span><span>@T("remoteEndpoint")</span></button>
@@ -254,32 +130,71 @@
     <footer class="sidebar-env">
         <div class="workspace-quick-host" @onclick:stopPropagation="true">
             <button class="workspace-quick-switch" title="@T("switchWorkspace")" @onclick="ToggleQuickSwitch">
-            <span>@(WorkspaceName ?? WorkspaceLabel(WorkspacePath))</span>
-            <small>@WorkspaceTypeLabel</small>
+                <span>@(WorkspaceName ?? WorkspaceLabel(WorkspacePath))</span>
+                <small>@WorkspaceTypeLabel</small>
             </button>
             @if (quickSwitchOpen)
             {
                 <div class="workspace-quick-menu">
+                    <button class="quick-workspace-add" @onclick="OnNewWorkspace">
+                        <span class="fluent-icon">@Icon("add")</span>
+                        <span>@T("newWorkspace")</span>
+                    </button>
+                    <div class="quick-switch-separator"></div>
                     @foreach (var item in WorkspaceOptions)
                     {
-                        <button @key="item" class="@WorkspaceQuickClass(item)" @onclick="() => SelectWorkspaceFromQuickSwitch(item)">
-                            <span>@WorkspaceLabel(item)</span>
-                            @if (!IsWorkspaceUsable(item))
-                            {
-                                <small>@T("unavailable")</small>
-                            }
-                        </button>
+                        var isActiveWorkspace = string.Equals(WorkspacePath, item, StringComparison.OrdinalIgnoreCase);
+                        var isUsableWorkspace = IsWorkspaceUsable(item);
+                        <div @key="item" class="@WorkspaceQuickRowClass(item)">
+                            <button class="quick-workspace-main" title="@WorkspaceMainTitle(isUsableWorkspace)" @onclick="() => SelectWorkspaceFromQuickSwitch(item)">
+                                <span>@WorkspaceLabel(item)</span>
+                                @if (!isUsableWorkspace)
+                                {
+                                    <small>@T("unavailable")</small>
+                                }
+                            </button>
+                            <div class='@RowActionsClass(MenuKey("quick-workspace", item), "quick-workspace-actions")' @onclick:stopPropagation="true">
+                                <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("quick-workspace", item), keepQuickSwitch: true)'>···</button>
+                                <div class="more-menu quick-workspace-more">
+                                    @if (isUsableWorkspace)
+                                    {
+                                        <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
+                                        <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
+                                        @if (isActiveWorkspace)
+                                        {
+                                            <button @onclick="OnSaveWorkspace"><span class="fluent-icon">@Icon("save")</span><span>@T("save")</span></button>
+                                            @if (IsGitWorkspace)
+                                            {
+                                                <button @onclick="OnGitStatus"><span class="fluent-icon">@Icon("git")</span><span>Git 状态</span></button>
+                                                <button @onclick="OnGitPull"><span class="fluent-icon">@Icon("cloud")</span><span>拉取</span></button>
+                                                <button @onclick="OnGitPush"><span class="fluent-icon">@Icon("cloud")</span><span>推送</span></button>
+                                            }
+                                        }
+                                    }
+                                    <button @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("remove")</span><span>@T("removeFromList")</span></button>
+                                    @if (isUsableWorkspace)
+                                    {
+                                        @if (string.Equals(pendingDeleteWorkspacePath, item, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <button class="danger-menu" @onclick="() => ConfirmDeleteWorkspace(item)"><span class="fluent-icon">@Icon("delete")</span><span>@T("confirmDeleteWorkspace")</span></button>
+                                        }
+                                        else
+                                        {
+                                            <button class="danger-menu" @onclick="() => pendingDeleteWorkspacePath = item"><span class="fluent-icon">@Icon("delete")</span><span>@T("deleteWorkspaceFolder")</span></button>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </div>
                     }
                 </div>
             }
         </div>
         <button class="footer-button settings-button" title="@T("settings")" @onclick="OnShowSettings">⚙</button>
-        <button class="footer-button" title="@T("hideSidebar")" @onclick="OnToggleExplorer">◁</button>
     </footer>
 </aside>
 
 @code {
-    private bool workspaceMenuOpen;
     private bool quickSwitchOpen;
     private string? openMenuKey;
     private string? pendingDeleteWorkspacePath;
@@ -359,7 +274,6 @@
     [Parameter] public EventCallback<SpecificationEventArgs> OnDeleteSpecification { get; set; }
     [Parameter] public EventCallback OnShowRaw { get; set; }
     [Parameter] public EventCallback<SessionSelectedEventArgs> OnSelectSession { get; set; }
-    [Parameter] public EventCallback OnToggleExplorer { get; set; }
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(searchText);
 
@@ -373,15 +287,24 @@
 
     private string EmptyCollectionsText => IsSearching ? T("noMatchingCollections") : T("createOrLoadCollection");
 
-    private IReadOnlyList<string> FilteredWorkspaceOptions => WorkspaceOptions
-        .Where(item => Matches(WorkspaceLabel(item)) || Matches(item))
+    private ReadableCollection? RootCollection => Collections.FirstOrDefault(IsRootCollection);
+
+    private IReadOnlyList<ReadableCollection> RootLevelCollections => RootCollection is null
+        ? Collections
+        : Collections
+            .Where(collection => !IsRootCollection(collection))
+            .Concat(RootCollection.Children)
+            .ToList();
+
+    private IReadOnlyList<ReadableCollection> FilteredCollections => RootLevelCollections
+        .Where(collection => CollectionMatches(collection))
         .ToList();
 
-    private IReadOnlyList<ReadableCollection> FilteredCollections => Collections
-        .Where(collection => Matches(collection.Name) || collection.Requests.Any(RequestMatches))
-        .ToList();
+    private IReadOnlyList<ReadableCollection> SortedRootCollections => SortCollections(FilteredCollections).ToList();
 
-    private IReadOnlyList<ReadableCollection> SortedCollections => SortCollections(FilteredCollections).ToList();
+    private bool HasVisibleCollectionContent =>
+        FilteredCollections.Count > 0
+        || (RootCollection is not null && FilteredRequests(RootCollection).Count > 0);
 
     private IReadOnlyList<ReadableSpecification> FilteredSpecifications => Specifications
         .Where(specification => Matches(specification.Name)
@@ -407,8 +330,9 @@
 
     private IReadOnlyList<ReadableCollection> MoveTargetCollections(ReadableCollection source)
     {
-        return Collections
-            .Where(collection => !string.Equals(collection.Id, source.Id, StringComparison.OrdinalIgnoreCase))
+        return EnumerateCollections(Collections)
+            .Where(collection => !IsRootCollection(collection)
+                && !string.Equals(collection.Id, source.Id, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
 
@@ -447,19 +371,90 @@
         return Matches(request.Name) || Matches(request.Method) || Matches(request.Url);
     }
 
+    private bool CollectionMatches(ReadableCollection collection)
+    {
+        return Matches(collection.Name)
+            || collection.Requests.Any(RequestMatches)
+            || collection.Children.Any(CollectionMatches);
+    }
+
+    private IReadOnlyList<ReadableCollection> VisibleChildren(ReadableCollection collection)
+    {
+        return SortCollections(collection.Children
+            .Where(CollectionMatches)
+            .ToList())
+            .ToList();
+    }
+
+    private RenderFragment RenderCollectionNode(ReadableCollection collection) => @<div @key="collection" class="collection-node">
+        <div class="@CollectionClass(collection)">
+            <button class="tree-main" @onclick="() => ToggleCollection(collection)">
+                <span class="tree-caret">@(IsCollectionExpanded(collection) ? "▾" : "▸")</span>
+                <span class="item-main">@collection.Name</span>
+                <small>@CollectionBadge(collection)</small>
+            </button>
+            <div class='@RowActionsClass(MenuKey("collection", collection.Id))' @onclick:stopPropagation="true">
+                <button title="@T("newRequest")" @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))">＋</button>
+                <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("collection", collection.Id))'>···</button>
+                <div class="more-menu">
+                    <button @onclick="() => OnOpenCollectionConfig.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
+                    <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
+                    @RenderSortMenu($"collection:{collection.Id}")
+                    <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
+                    <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
+                </div>
+            </div>
+        </div>
+        @if (IsCollectionExpanded(collection) || IsSearching)
+        {
+            <div class="request-children">
+                @foreach (var child in VisibleChildren(collection))
+                {
+                    @RenderCollectionNode(child)
+                }
+                @RenderCollectionRequests(collection, isRoot: false)
+            </div>
+        }
+    </div>;
+
+    private RenderFragment RenderCollectionRequests(ReadableCollection collection, bool isRoot) => @<div class="collection-requests @(isRoot ? "root-requests" : null)">
+        @foreach (var request in SortedRequests(collection))
+        {
+            <div @key="request" class="@RequestRowClass(request)">
+                <button class="request-main" @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))">
+                    <span class="method tiny @request.Method.ToLowerInvariant()">@request.Method</span>
+                    <strong>@request.Name</strong>
+                </button>
+                <div class='@RowActionsClass(MenuKey("request", request.Id), "request-actions")' @onclick:stopPropagation="true">
+                    <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("request", request.Id))'>···</button>
+                    <div class="more-menu">
+                        <button @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("open")</span><span>@T("open")</span></button>
+                        <button @onclick="() => OnDuplicateRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
+                        <button @onclick="() => OnOpenRequestDefault.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("document")</span><span>@T("openDefault")</span></button>
+                        @if (MoveTargetCollections(collection).Count > 0)
+                        {
+                            <div class="menu-submenu">
+                                <button class="submenu-trigger" type="button">@T("moveTo")</button>
+                                <div class="submenu-panel">
+                                    @foreach (var targetCollection in MoveTargetCollections(collection))
+                                    {
+                                        <button @key="targetCollection.Id" @onclick="() => OnMoveRequest.InvokeAsync(new RequestMoveEventArgs(collection, request, targetCollection))">@targetCollection.Name</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        <button class="danger-menu" @onclick="() => OnDeleteRequestItem.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>;
+
     private bool Matches(string? value)
     {
         return string.IsNullOrWhiteSpace(Query)
             || (!string.IsNullOrWhiteSpace(value)
                 && value.Contains(Query, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private void ToggleWorkspaceMenu()
-    {
-        workspaceMenuOpen = !workspaceMenuOpen;
-        quickSwitchOpen = false;
-        openMenuKey = null;
-        pendingDeleteWorkspacePath = null;
     }
 
     private void ToggleQuickSwitch()
@@ -471,6 +466,11 @@
 
     private async Task SelectWorkspaceFromQuickSwitch(string path)
     {
+        if (!IsWorkspaceUsable(path))
+        {
+            return;
+        }
+
         quickSwitchOpen = false;
         await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(path));
     }
@@ -485,9 +485,13 @@
         await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(path));
     }
 
-    private void ToggleMore(string key)
+    private void ToggleMore(string key, bool keepQuickSwitch = false)
     {
-        quickSwitchOpen = false;
+        if (!keepQuickSwitch)
+        {
+            quickSwitchOpen = false;
+        }
+
         openMenuKey = string.Equals(openMenuKey, key, StringComparison.Ordinal) ? null : key;
         pendingDeleteWorkspacePath = null;
     }
@@ -535,6 +539,11 @@
         searchText = string.Empty;
     }
 
+    private void CollapseAllCollections()
+    {
+        expandedCollectionIds.Clear();
+    }
+
     private void ToggleCollection(ReadableCollection collection)
     {
         if (!expandedCollectionIds.Add(collection.Id))
@@ -574,9 +583,19 @@
         return classes;
     }
 
-    private string WorkspaceQuickClass(string path) => string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase)
-        ? "active"
-        : string.Empty;
+    private string WorkspaceQuickRowClass(string path)
+    {
+        var classes = string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase)
+            ? "quick-workspace-row active"
+            : "quick-workspace-row";
+
+        if (!IsWorkspaceUsable(path))
+        {
+            classes += " unavailable";
+        }
+
+        return classes;
+    }
 
     private string RowActionsClass(string key, string? extra = null)
     {
@@ -648,9 +667,15 @@
 
     private string CollectionBadge(ReadableCollection collection)
     {
-        return collection.Requests.Count == 1
+        var count = TotalRequestCount(collection);
+        return count == 1
             ? $"1 {T("requestLower")}"
-            : $"{collection.Requests.Count} {T("requestsLower")}";
+            : $"{count} {T("requestsLower")}";
+    }
+
+    private static int TotalRequestCount(ReadableCollection collection)
+    {
+        return collection.Requests.Count + collection.Children.Sum(TotalRequestCount);
     }
 
     private string SpecificationBadge(ReadableSpecification specification)
@@ -737,6 +762,25 @@
         return string.IsNullOrWhiteSpace(sanitized) ? "item" : sanitized;
     }
 
+    private static IEnumerable<ReadableCollection> EnumerateCollections(IEnumerable<ReadableCollection> collections)
+    {
+        foreach (var collection in collections)
+        {
+            yield return collection;
+            foreach (var child in EnumerateCollections(collection.Children))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private static bool IsRootCollection(ReadableCollection collection)
+    {
+        var directory = collection.RequestDirectory?.Replace('\\', '/').TrimEnd('/');
+        return string.Equals(collection.Id, "__collections_root__", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(directory, "collections", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string Icon(string name)
     {
         return name switch
@@ -750,6 +794,10 @@
             "open" => "\uE8A7",
             "folder" => "\uE8B7",
             "settings" => "\uE713",
+            "save" => "\uE74E",
+            "remove" => "\uE738",
+            "git" => "\uE8EE",
+            "collapse" => "\uE740",
             "document" => "\uE8A5",
             "cloud" => "\uE753",
             "text" => "\uE8D2",

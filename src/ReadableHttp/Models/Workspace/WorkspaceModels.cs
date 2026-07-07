@@ -66,6 +66,8 @@ public sealed class ReadableCollection
     public Dictionary<string, ReadableVariable> Variables { get; set; } = [];
 
     public List<ReadableRequest> Requests { get; set; } = [];
+
+    public List<ReadableCollection> Children { get; set; } = [];
 }
 
 public sealed class ReadableSpecification

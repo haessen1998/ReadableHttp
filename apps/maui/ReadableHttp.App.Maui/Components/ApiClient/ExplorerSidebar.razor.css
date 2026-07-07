@@ -30,7 +30,6 @@
 .sidebar-brand,
 .sidebar-actions,
 .sidebar-search,
-.workspace-menu,
 .nav-block,
 .sidebar-env {
     flex: 0 0 auto;
@@ -63,10 +62,11 @@
     color: var(--text);
     padding: 0;
     text-align: left;
+    cursor: default;
 }
 
 .brand-button:hover {
-    color: var(--accent);
+    color: var(--text);
 }
 
 .brand-mark {
@@ -140,33 +140,6 @@
 .brand-copy small {
     color: var(--muted);
     font-size: 12px;
-}
-
-.brand-caret {
-    flex: 0 0 auto;
-    color: var(--muted-2);
-    font-size: 10px;
-}
-
-.brand-toggle {
-    display: grid;
-    place-items: center;
-    flex: 0 0 auto;
-    width: 24px;
-    height: 24px;
-    border: 1px solid transparent;
-    border-radius: var(--control-radius);
-    background: transparent;
-    color: var(--muted);
-    padding: 0;
-    font-family: Consolas, "Cascadia Mono", monospace;
-    font-size: 10px;
-}
-
-.brand-toggle:hover {
-    border-color: var(--line-soft);
-    background: var(--panel-2);
-    color: var(--accent);
 }
 
 .icon-button {
@@ -255,7 +228,6 @@
     color: var(--text);
 }
 
-.workspace-menu,
 .nav-block {
     display: grid;
     gap: 8px;
@@ -332,6 +304,11 @@
     font-size: 11px;
 }
 
+.title-actions > button,
+.row-actions > button {
+    font-family: Consolas, "Cascadia Mono", monospace;
+}
+
 .title-actions button:hover,
 .icon-actions button:hover,
 .block-title > button:not(.section-toggle):hover {
@@ -352,10 +329,6 @@
 
 .git-actions {
     opacity: 0.92;
-}
-
-.workspace-title {
-    margin-top: 6px;
 }
 
 .workspace-list,
@@ -615,6 +588,24 @@
     border-left: 1px solid var(--line-soft);
 }
 
+.collection-requests {
+    display: grid;
+    gap: 2px;
+}
+
+.root-requests {
+    margin-bottom: 4px;
+}
+
+.request-children .collection-node {
+    display: grid;
+    gap: 2px;
+}
+
+.request-children .tree-row {
+    min-height: 29px;
+}
+
 .request-row,
 .request-empty {
     margin-left: 0;
@@ -754,8 +745,7 @@
     display: grid;
     min-width: 176px;
     max-width: 240px;
-    max-height: 260px;
-    overflow: auto;
+    overflow: visible;
     border: 1px solid color-mix(in srgb, var(--line) 70%, var(--text));
     border-radius: 6px;
     background: color-mix(in srgb, var(--panel) 97%, transparent);
@@ -852,40 +842,76 @@
 .workspace-quick-menu {
     position: absolute;
     left: 0;
-    right: -74px;
+    right: -40px;
     bottom: 40px;
     z-index: 42;
     display: grid;
     gap: 2px;
-    max-height: 220px;
-    overflow: auto;
+    overflow: visible;
     border: 1px solid var(--line);
     border-radius: 6px;
-    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 96%, transparent);
     box-shadow: var(--shadow);
     padding: 5px;
 }
 
-.workspace-quick-menu button {
+.quick-workspace-row {
     display: grid;
-    gap: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid transparent;
+    border-radius: var(--control-radius);
+}
+
+.quick-workspace-row:hover,
+.quick-workspace-row.active {
+    border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+    background: var(--panel-2);
+}
+
+.quick-workspace-row.active .quick-workspace-main span {
+    color: var(--accent);
+}
+
+.quick-workspace-row.unavailable .quick-workspace-main span {
+    color: var(--muted-2);
+}
+
+.quick-workspace-add,
+.quick-workspace-main,
+.workspace-quick-menu .quick-workspace-actions > button {
+    display: grid;
     min-width: 0;
     border: 1px solid transparent;
     border-radius: var(--control-radius);
     background: transparent;
     color: var(--text);
+}
+
+.quick-workspace-add,
+.quick-workspace-main {
+    gap: 0;
     padding: 6px 7px;
     text-align: left;
 }
 
-.workspace-quick-menu button:hover,
-.workspace-quick-menu button.active {
+.quick-workspace-add {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 7px;
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.quick-workspace-add:hover,
+.workspace-quick-menu .quick-workspace-actions > button:hover {
     border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
     background: var(--panel-2);
 }
 
-.workspace-quick-menu button.active span {
-    color: var(--accent);
+.quick-workspace-main {
+    border: 0;
 }
 
 .workspace-quick-menu span,
@@ -903,6 +929,45 @@
 .workspace-quick-menu small {
     color: var(--muted);
     font-size: 10px;
+}
+
+.quick-switch-separator {
+    height: 1px;
+    margin: 4px 2px;
+    background: var(--line);
+}
+
+.workspace-quick-menu .quick-workspace-actions {
+    position: relative;
+    padding-right: 2px;
+}
+
+.workspace-quick-menu .quick-workspace-actions > button {
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    color: var(--muted);
+    font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets", Consolas, monospace;
+    font-size: 11px;
+}
+
+.quick-workspace-more {
+    top: auto;
+    right: auto;
+    bottom: -4px;
+    left: calc(100% + 6px);
+    min-width: 188px;
+    z-index: 80;
+}
+
+.quick-workspace-more::before {
+    position: absolute;
+    top: 0;
+    right: 100%;
+    bottom: 0;
+    width: 8px;
+    content: "";
 }
 
 .sidebar-env > button:not(.workspace-quick-switch) {

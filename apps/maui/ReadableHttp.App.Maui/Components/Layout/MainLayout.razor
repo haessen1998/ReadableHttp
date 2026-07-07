@@ -4,15 +4,6 @@
 @inject AppCommandService Commands
 
 <main class="api-client-shell @(State.IsDarkTheme ? "theme-dark" : "theme-light") @State.FontSizeClass">
-    @if (!State.ShowExplorer)
-    {
-        <button class="edge-toggle left" title="展开左侧资源栏" @onclick="State.ToggleExplorer">›</button>
-    }
-    @if (!State.ShowInspector)
-    {
-        <button class="edge-toggle right" title="展开右侧面板" @onclick="() => State.ShowRightPanel(RightPanelMode.Docs)">‹</button>
-    }
-
     <section class="client-workbench @(State.ShowExplorer ? "" : "hide-explorer") @(State.ShowInspector ? "" : "hide-inspector")">
         @if (State.ShowExplorer)
         {
@@ -84,8 +75,7 @@
                              OnDuplicateSpecification="@State.DuplicateSpecificationAsync"
                              OnDeleteSpecification="@State.DeleteSpecificationAsync"
                              OnShowRaw="@State.ShowRaw"
-                             OnSelectSession="@State.SelectSession"
-                             OnToggleExplorer="@State.ToggleExplorer" />
+                             OnSelectSession="@State.SelectSession" />
         }
 
         @Body
@@ -122,7 +112,6 @@
                             AiDraft="@State.AiDraft"
                             AiDraftChanged="@State.SetAiDraft"
                             OnSelectMode="@State.ShowRightPanel"
-                            OnToggleInspector="@State.ToggleInspector"
                             OnSelectOperation="@State.SelectOperation"
                             OnSendAiMessage="@State.SendAiMessage"
                             OnApplyAiAction="@State.ApplyAiAction"

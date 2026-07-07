@@ -12,6 +12,10 @@ public sealed record EditableNameValueChange(string Kind, int Index, string Fiel
 
 public sealed record VariableChange(string Scope, int Index, string Field, string? Value);
 
+public sealed record EnvironmentChange(string EnvironmentId, string Field, string? Value);
+
+public sealed record AuthChange(string Field, string? Value);
+
 public sealed record AppSettingsDraft(
     string ThemeMode = "system",
     string ProxyMode = "system",
@@ -66,6 +70,8 @@ public sealed class RequestWorkspaceTab
     public List<ReadableNameValue> Headers { get; set; } = [];
 
     public List<ReadableNameValue> Form { get; set; } = [];
+
+    public ReadableAuth? Auth { get; set; }
 
     public string StatusText { get; set; } = "Ready";
 

@@ -11,9 +11,8 @@ namespace ReadableHttp.App.Maui.Components.ApiClient;
 public sealed class ApiClientWorkspaceState
 {
     private const string DiscoveredCollectionIdPrefix = "__discovered_collection__:";
-    private const string UngroupedCollectionId = "__ungrouped_collection__";
-    private const string UngroupedCollectionDirectory = "collections";
-    private const string UngroupedCollectionName = "未归档";
+    private const string RootCollectionId = "__collections_root__";
+    private const string RootCollectionDirectory = "collections";
     public const string ThemeSystem = "system";
     public const string ThemeLight = "light";
     public const string ThemeDark = "dark";
@@ -56,6 +55,7 @@ public sealed class ApiClientWorkspaceState
     public IReadOnlyList<ReadableNameValue> RequestQuery => ActiveRequestTab?.Query ?? [];
     public IReadOnlyList<ReadableNameValue> RequestHeaders => ActiveRequestTab?.Headers ?? [];
     public IReadOnlyList<ReadableNameValue> RequestForm => ActiveRequestTab?.Form ?? [];
+    public ReadableAuth? RequestAuth => ActiveRequestTab?.Auth;
     public string StatusText => ActiveRequestTab?.StatusText ?? "Ready";
     public string ResponseText => ActiveRequestTab?.ResponseText ?? string.Empty;
     public string ResponseNodePath => ActiveRequestTab?.ResponseNodePath ?? "root";
@@ -114,8 +114,8 @@ public sealed class ApiClientWorkspaceState
     {
         "collections" =>
         [
-            new(T("collections"), Collections.Count.ToString()),
-            new(T("requests"), Collections.Sum(collection => collection.Requests.Count).ToString()),
+            new(T("collections"), EnumerateCollections(Collections).Count(collection => !IsRootCollection(collection)).ToString()),
+            new(T("requests"), EnumerateCollections(Collections).Sum(collection => collection.Requests.Count).ToString()),
             new(T("workspace"), WorkspaceName)
         ],
         "specs" =>
@@ -142,6 +142,22 @@ public sealed class ApiClientWorkspaceState
     public IReadOnlyList<KeyValuePair<string, ReadableVariable>> WorkspaceVariables => Workspace?.Variables.ToList() ?? [];
 
     public IReadOnlyList<KeyValuePair<string, ReadableVariable>> CollectionVariables => SelectedCollection?.Variables.ToList() ?? [];
+
+    public IReadOnlyList<ReadableEnvironment> Environments => Workspace?.Environments ?? [];
+
+    public IReadOnlyList<ReadableCollection> RequestCollectionOptions => EnumerateCollections(Collections).ToList();
+
+    public string ActiveRequestCollectionId => ActiveRequestTab?.CollectionId ?? string.Empty;
+
+    public string ActiveRequestCollectionName => FindCollectionById(ActiveRequestTab?.CollectionId)?.Name ?? T("notSaved");
+
+    public string SelectedEnvironmentId { get; private set; } = string.Empty;
+
+    public string SelectedEnvironmentName => SelectedEnvironment?.Name ?? T("noEnvironment");
+
+    private ReadableEnvironment? SelectedEnvironment => Environments.FirstOrDefault(environment =>
+        string.Equals(environment.Id, SelectedEnvironmentId, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(environment.Name, SelectedEnvironmentId, StringComparison.OrdinalIgnoreCase));
 
     public string SpecificationName => SelectedSpecification?.Name ?? string.Empty;
 
@@ -467,6 +483,107 @@ public sealed class ApiClientWorkspaceState
         NotifyChanged();
     }
 
+    public void SetAuth(AuthChange change)
+    {
+        var tab = EnsureActiveRequestTab();
+        tab.Auth ??= new ReadableAuth();
+        var auth = tab.Auth;
+
+        switch (change.Field)
+        {
+            case "type":
+                auth.Type = Enum.TryParse<ReadableAuthType>(change.Value, ignoreCase: true, out var authType)
+                    ? authType
+                    : ReadableAuthType.None;
+                EnsureAuthOptions(auth);
+                break;
+            case "username":
+                auth.Username = change.Value;
+                break;
+            case "password":
+                auth.Password = change.Value;
+                break;
+            case "token":
+                auth.Token = change.Value;
+                break;
+            case "oauth1.consumerKey":
+                EnsureOAuth1(auth).ConsumerKey = change.Value;
+                break;
+            case "oauth1.consumerSecret":
+                EnsureOAuth1(auth).ConsumerSecret = change.Value;
+                break;
+            case "oauth1.token":
+                EnsureOAuth1(auth).Token = change.Value;
+                break;
+            case "oauth1.tokenSecret":
+                EnsureOAuth1(auth).TokenSecret = change.Value;
+                break;
+            case "oauth1.signatureMethod":
+                EnsureOAuth1(auth).SignatureMethod = Enum.TryParse<ReadableOAuth1SignatureMethod>(change.Value, ignoreCase: true, out var signatureMethod)
+                    ? signatureMethod
+                    : ReadableOAuth1SignatureMethod.HmacSha1;
+                break;
+            case "oauth1.placement":
+                EnsureOAuth1(auth).Placement = Enum.TryParse<ReadableTokenPlacement>(change.Value, ignoreCase: true, out var oauth1Placement)
+                    ? oauth1Placement
+                    : ReadableTokenPlacement.Header;
+                break;
+            case "oauth2.grantType":
+                EnsureOAuth2(auth).GrantType = Enum.TryParse<ReadableOAuth2GrantType>(change.Value, ignoreCase: true, out var grantType)
+                    ? grantType
+                    : ReadableOAuth2GrantType.AuthorizationCode;
+                break;
+            case "oauth2.authorizationUrl":
+                EnsureOAuth2(auth).AuthorizationUrl = change.Value;
+                break;
+            case "oauth2.tokenUrl":
+                EnsureOAuth2(auth).TokenUrl = change.Value;
+                break;
+            case "oauth2.clientId":
+                EnsureOAuth2(auth).ClientId = change.Value;
+                break;
+            case "oauth2.clientSecret":
+                EnsureOAuth2(auth).ClientSecret = change.Value;
+                break;
+            case "oauth2.scope":
+                EnsureOAuth2(auth).Scopes = (change.Value ?? string.Empty)
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .ToList();
+                break;
+            case "oauth2.tokenId":
+                EnsureOAuth2(auth).TokenId = string.IsNullOrWhiteSpace(change.Value) ? "credentials" : change.Value.Trim();
+                break;
+            case "oauth2.tokenSource":
+                EnsureOAuth2(auth).TokenSource = Enum.TryParse<ReadableOAuth2TokenSource>(change.Value, ignoreCase: true, out var tokenSource)
+                    ? tokenSource
+                    : ReadableOAuth2TokenSource.AccessToken;
+                break;
+            case "oauth2.placement":
+                EnsureOAuth2(auth).TokenPlacement = Enum.TryParse<ReadableTokenPlacement>(change.Value, ignoreCase: true, out var oauth2Placement)
+                    ? oauth2Placement
+                    : ReadableTokenPlacement.Header;
+                break;
+        }
+
+        if (auth.Type == ReadableAuthType.None)
+        {
+            tab.Auth = null;
+        }
+
+        tab.IsDirty = true;
+        SyncSelectedRequestFromTab(tab);
+        NotifyChanged();
+    }
+
+    public void SetSelectedEnvironment(string value)
+    {
+        SelectedEnvironmentId = value ?? string.Empty;
+        AddActivity("Environment", string.IsNullOrWhiteSpace(SelectedEnvironmentId)
+            ? T("noEnvironment")
+            : SelectedEnvironmentName);
+        NotifyChanged();
+    }
+
     public void SetRequestName(string value)
     {
         var tab = EnsureActiveRequestTab();
@@ -605,6 +722,63 @@ public sealed class ApiClientWorkspaceState
         NotifyChanged();
     }
 
+    public void AddEnvironment()
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+
+        var name = NextEnvironmentName("environment");
+        var environment = new ReadableEnvironment
+        {
+            Name = name
+        };
+        Workspace.Environments.Add(environment);
+        SelectedEnvironmentId = environment.Id;
+        AddActivity("Environment", $"已新增 {environment.Name}");
+        NotifyChanged();
+    }
+
+    public void SetEnvironment(EnvironmentChange change)
+    {
+        var environment = FindEnvironment(change.EnvironmentId);
+        if (environment is null)
+        {
+            return;
+        }
+
+        if (change.Field == "name")
+        {
+            environment.Name = string.IsNullOrWhiteSpace(change.Value) ? "Environment" : change.Value.Trim();
+        }
+
+        NotifyChanged();
+    }
+
+    public void RemoveEnvironment(string environmentId)
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+
+        var environment = FindEnvironment(environmentId);
+        if (environment is null)
+        {
+            return;
+        }
+
+        Workspace.Environments.Remove(environment);
+        if (string.Equals(SelectedEnvironmentId, environment.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedEnvironmentId = string.Empty;
+        }
+
+        AddActivity("Environment", $"已删除 {environment.Name}");
+        NotifyChanged();
+    }
+
     public void SetWorkspaceRemoteUrl(string value)
     {
         if (Workspace is null)
@@ -714,8 +888,11 @@ public sealed class ApiClientWorkspaceState
                 "collections" => "Collections",
                 "newCollection" => "New collection",
                 "reloadCollections" => "Reload collections",
+                "collapseAll" => "Collapse all",
                 "newRequest" => "New request",
                 "duplicate" => "Duplicate",
+                "copy" => "Copy",
+                "wrapResponse" => "Wrap response",
                 "delete" => "Delete",
                 "noMatchingRequests" => "No matching requests",
                 "open" => "Open",
@@ -746,6 +923,14 @@ public sealed class ApiClientWorkspaceState
                 "type" => "Type",
                 "path" => "Path",
                 "environment" => "Environment",
+                "environments" => "Environments",
+                "noEnvironment" => "No environment",
+                "newEnvironment" => "New environment",
+                "workspaceVariables" => "Workspace variables",
+                "runtime" => "Runtime",
+                "requestInfo" => "Info",
+                "currentCollection" => "Current collection",
+                "notSaved" => "Not saved",
                 "saveWorkspace" => "Save Workspace",
                 "requestDirectory" => "Request directory",
                 "source" => "Source",
@@ -821,8 +1006,11 @@ public sealed class ApiClientWorkspaceState
             "collections" => "集合",
             "newCollection" => "新增集合",
             "reloadCollections" => "重新加载集合",
+            "collapseAll" => "全部收起",
             "newRequest" => "新增请求",
             "duplicate" => "复制",
+            "copy" => "复制",
+            "wrapResponse" => "响应自动换行",
             "delete" => "删除",
             "noMatchingRequests" => "没有匹配的请求",
             "open" => "打开",
@@ -852,7 +1040,15 @@ public sealed class ApiClientWorkspaceState
             "name" => "名称",
             "type" => "类型",
             "path" => "路径",
-            "environment" => "环境变量",
+            "environment" => "环境",
+            "environments" => "环境",
+            "noEnvironment" => "无环境",
+            "newEnvironment" => "新增环境",
+            "workspaceVariables" => "工作区变量",
+            "runtime" => "运行",
+            "requestInfo" => "信息",
+            "currentCollection" => "当前集合",
+            "notSaved" => "未保存",
             "saveWorkspace" => "保存工作区",
             "requestDirectory" => "请求目录",
             "source" => "来源",
@@ -986,10 +1182,16 @@ public sealed class ApiClientWorkspaceState
             Workspace = await _workspaceStore.LoadWorkspaceAsync(WorkspacePath);
             EnsureWorkspaceLayout(WorkspacePath);
             var workspaceTypeChanged = ApplyGitWorkspaceType(WorkspacePath, Workspace);
-            Collections = Workspace.Collections.ToList();
+            Collections = BuildCollectionTree(Workspace.Collections).ToList();
             await AddDiscoveredCollectionsAsync();
             await LoadAllCollectionRequestsAsync();
+            AddDiscoveredEnvironments();
             AddDiscoveredSpecifications();
+            if (!string.IsNullOrWhiteSpace(SelectedEnvironmentId) && SelectedEnvironment is null)
+            {
+                SelectedEnvironmentId = string.Empty;
+            }
+
             SelectedCollection = null;
             SelectedRequest = null;
             WorkspaceStatus = $"Loaded: {Workspace.Name}";
@@ -1354,9 +1556,9 @@ public sealed class ApiClientWorkspaceState
 
         var collection = new ReadableCollection
         {
-            Name = $"New Collection {Collections.Count + 1}",
+            Name = $"New Collection {EnumerateCollections(Collections).Count() + 1}",
             SourceType = ReadableCollectionSourceType.Local,
-            RequestDirectory = $"collections/collection-{Collections.Count + 1}"
+            RequestDirectory = $"collections/collection-{EnumerateCollections(Collections).Count() + 1}"
         };
         Collections.Add(collection);
         Workspace.Collections = Collections;
@@ -1717,11 +1919,11 @@ public sealed class ApiClientWorkspaceState
         }
 
         var collection = SelectedCollection;
-        Collections.Remove(collection);
+        RemoveCollectionFromTree(collection);
         Workspace.Collections = Collections;
         await _workspaceStore.DeleteCollectionRequestsAsync(WorkspacePath, collection);
         await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
-        SelectedCollection = Collections.FirstOrDefault();
+        SelectedCollection = FirstVisibleCollection();
         if (SelectedCollection is not null)
         {
             await LoadCollectionRequestsAsync(SelectedCollection);
@@ -1778,7 +1980,7 @@ public sealed class ApiClientWorkspaceState
         {
             Name = NextCollectionName($"{collection.Name} Copy"),
             SourceType = collection.SourceType,
-            RequestDirectory = $"collections/{ToFileName(collection.Name)}-copy-{Collections.Count + 1}",
+            RequestDirectory = $"collections/{ToFileName(collection.Name)}-copy-{EnumerateCollections(Collections).Count() + 1}",
             Requests = collection.Requests.Select(CloneRequest).ToList()
         };
         Collections.Add(clone);
@@ -1800,13 +2002,13 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        Collections.Remove(collection);
+        RemoveCollectionFromTree(collection);
         Workspace.Collections = Collections;
         await _workspaceStore.DeleteCollectionRequestsAsync(WorkspacePath, collection);
         await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
         if (ReferenceEquals(SelectedCollection, collection))
         {
-            SelectedCollection = Collections.FirstOrDefault();
+            SelectedCollection = FirstVisibleCollection();
             SelectedRequest = null;
             if (SelectedCollection is not null)
             {
@@ -1865,6 +2067,51 @@ public sealed class ApiClientWorkspaceState
         SelectedRequest = request;
         OpenCollectionRequestTab(args.TargetCollection, request);
         AddActivity("Request", $"已移动到 {args.TargetCollection.Name}");
+        NotifyChanged();
+    }
+
+    public async Task MoveActiveRequestToCollectionAsync(string targetCollectionId)
+    {
+        var targetCollection = FindCollectionById(targetCollectionId);
+        if (targetCollection is null)
+        {
+            return;
+        }
+
+        var tab = EnsureActiveRequestTab();
+        if (tab.Origin == RequestTabOrigin.Collection)
+        {
+            var sourceCollection = FindCollectionById(tab.CollectionId);
+            var request = sourceCollection?.Requests.FirstOrDefault(item =>
+                string.Equals(GetRequestSourceKey(sourceCollection, item), tab.SourceKey, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.Id, tab.RequestId, StringComparison.OrdinalIgnoreCase));
+            if (sourceCollection is not null && request is not null)
+            {
+                await MoveRequestAsync(new RequestMoveEventArgs(sourceCollection, request, targetCollection));
+                return;
+            }
+        }
+
+        await LoadCollectionRequestsAsync(targetCollection);
+        var newRequest = new ReadableRequest
+        {
+            Name = NextRequestName(targetCollection, tab.Title)
+        };
+        ApplyTabToRequest(tab, newRequest);
+        targetCollection.Requests.Add(newRequest);
+        await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace!);
+        await _workspaceStore.SaveRequestAsync(WorkspacePath, targetCollection, newRequest);
+
+        tab.Origin = RequestTabOrigin.Collection;
+        tab.CollectionId = targetCollection.Id;
+        tab.RequestId = newRequest.Id;
+        tab.SourceKey = GetRequestSourceKey(targetCollection, newRequest);
+        tab.Title = newRequest.Name;
+        tab.ActiveSource = "Collection";
+        tab.IsDirty = false;
+        SelectedCollection = targetCollection;
+        SelectedRequest = newRequest;
+        AddActivity("Request", $"已保存到 {targetCollection.Name}");
         NotifyChanged();
     }
 
@@ -2036,7 +2283,7 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        var collection = Collections.FirstOrDefault(item => string.Equals(item.Id, tab.CollectionId, StringComparison.OrdinalIgnoreCase));
+        var collection = FindCollectionById(tab.CollectionId);
         var request = collection?.Requests.FirstOrDefault(item =>
             string.Equals(GetRequestSourceKey(collection, item), tab.SourceKey, StringComparison.OrdinalIgnoreCase)
             || string.Equals(item.Id, tab.RequestId, StringComparison.OrdinalIgnoreCase));
@@ -2068,7 +2315,7 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        var collection = GetOrCreateUngroupedCollection();
+        var collection = GetOrCreateRootCollection();
 
         await LoadCollectionRequestsAsync(collection);
         var request = new ReadableRequest
@@ -2153,6 +2400,19 @@ public sealed class ApiClientWorkspaceState
     }
 
     public void SelectResponseNode(ResponseNodeSelectedEventArgs args) => SelectResponseNode(args.Path);
+
+    public async Task CopySelectedResponseAsync()
+    {
+        var text = SelectedResponseText;
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        await Microsoft.Maui.ApplicationModel.DataTransfer.Clipboard.Default.SetTextAsync(text);
+        AddActivity("Response", "已复制当前响应内容");
+        NotifyChanged();
+    }
 
     public async Task SendAiMessage()
     {
@@ -2332,7 +2592,7 @@ public sealed class ApiClientWorkspaceState
 
     private async Task LoadAllCollectionRequestsAsync()
     {
-        foreach (var collection in Collections)
+        foreach (var collection in EnumerateCollections(Collections))
         {
             await LoadCollectionRequestsAsync(collection);
         }
@@ -2340,7 +2600,7 @@ public sealed class ApiClientWorkspaceState
 
     private async Task AddDiscoveredCollectionsAsync()
     {
-        var knownDirectories = Collections
+        var knownDirectories = EnumerateCollections(Collections)
             .Select(collection => NormalizePath(GetCollectionDirectory(collection)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -2355,17 +2615,17 @@ public sealed class ApiClientWorkspaceState
             var relativeDirectory = Path.GetRelativePath(WorkspacePath, directory).Replace('\\', '/');
             var collection = new ReadableCollection
             {
-                Id = string.Equals(relativeDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase)
-                    ? UngroupedCollectionId
+                Id = string.Equals(relativeDirectory, RootCollectionDirectory, StringComparison.OrdinalIgnoreCase)
+                    ? RootCollectionId
                     : $"{DiscoveredCollectionIdPrefix}{relativeDirectory}",
-                Name = string.Equals(relativeDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase)
-                    ? UngroupedCollectionName
+                Name = string.Equals(relativeDirectory, RootCollectionDirectory, StringComparison.OrdinalIgnoreCase)
+                    ? RootCollectionDirectory
                     : Path.GetFileName(directory),
                 SourceType = ReadableCollectionSourceType.Local,
                 RequestDirectory = relativeDirectory
             };
             collection.Requests = (await _workspaceStore.LoadCollectionRequestsAsync(WorkspacePath, collection)).ToList();
-            Collections.Add(collection);
+            AddCollectionToTree(collection);
             knownDirectories.Add(NormalizePath(directory));
         }
     }
@@ -2378,18 +2638,152 @@ public sealed class ApiClientWorkspaceState
             yield break;
         }
 
-        if (Directory.EnumerateFiles(collectionsDirectory, "*.json", SearchOption.TopDirectoryOnly).Any())
-        {
-            yield return collectionsDirectory;
-        }
-
-        foreach (var collectionDirectory in Directory.EnumerateDirectories(collectionsDirectory))
+        foreach (var collectionDirectory in Directory.EnumerateDirectories(collectionsDirectory, "*", SearchOption.AllDirectories)
+            .Prepend(collectionsDirectory))
         {
             if (Directory.EnumerateFiles(collectionDirectory, "*.json", SearchOption.AllDirectories).Any())
             {
                 yield return collectionDirectory;
             }
         }
+    }
+
+    private void AddCollectionToTree(ReadableCollection collection)
+    {
+        var parent = FindParentCollection(collection);
+        if (parent is null)
+        {
+            Collections.Add(collection);
+        }
+        else if (!parent.Children.Any(item => string.Equals(item.Id, collection.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            parent.Children.Add(collection);
+        }
+    }
+
+    private static IReadOnlyList<ReadableCollection> BuildCollectionTree(IEnumerable<ReadableCollection> collections)
+    {
+        var all = EnumerateCollections(collections)
+            .GroupBy(collection => CollectionDirectoryKey(collection), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+        foreach (var collection in all)
+        {
+            collection.Children = [];
+        }
+
+        var byDirectory = all
+            .Where(collection => !string.IsNullOrWhiteSpace(CollectionDirectoryKey(collection)))
+            .ToDictionary(CollectionDirectoryKey, StringComparer.OrdinalIgnoreCase);
+        var roots = new List<ReadableCollection>();
+        foreach (var collection in all)
+        {
+            var key = CollectionDirectoryKey(collection);
+            var parentKey = ParentDirectoryKey(key);
+            if (!string.IsNullOrWhiteSpace(parentKey) && byDirectory.TryGetValue(parentKey, out var parent))
+            {
+                parent.Children.Add(collection);
+            }
+            else
+            {
+                roots.Add(collection);
+            }
+        }
+
+        return roots;
+    }
+
+    private static IEnumerable<ReadableCollection> EnumerateCollections(IEnumerable<ReadableCollection> collections)
+    {
+        foreach (var collection in collections)
+        {
+            yield return collection;
+            foreach (var child in EnumerateCollections(collection.Children))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private ReadableCollection? FindCollectionById(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return null;
+        }
+
+        return EnumerateCollections(Collections)
+            .FirstOrDefault(collection => string.Equals(collection.Id, id, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private ReadableEnvironment? FindEnvironment(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return null;
+        }
+
+        return Environments.FirstOrDefault(environment =>
+            string.Equals(environment.Id, id, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(environment.Name, id, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private ReadableCollection? FirstVisibleCollection()
+    {
+        return EnumerateCollections(Collections)
+            .FirstOrDefault(collection => !IsRootCollection(collection));
+    }
+
+    private bool RemoveCollectionFromTree(ReadableCollection collection)
+    {
+        if (Collections.Remove(collection))
+        {
+            return true;
+        }
+
+        foreach (var parent in EnumerateCollections(Collections))
+        {
+            if (parent.Children.Remove(collection))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private ReadableCollection? FindParentCollection(ReadableCollection collection)
+    {
+        var relativeDirectory = CollectionDirectoryKey(collection);
+        if (string.IsNullOrWhiteSpace(relativeDirectory) || string.Equals(relativeDirectory, RootCollectionDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var parentDirectory = ParentDirectoryKey(relativeDirectory);
+        if (string.IsNullOrWhiteSpace(parentDirectory) || string.Equals(parentDirectory, RootCollectionDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            return Collections.FirstOrDefault(item => string.Equals(item.RequestDirectory, RootCollectionDirectory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return EnumerateCollections(Collections)
+            .FirstOrDefault(item => string.Equals(CollectionDirectoryKey(item), parentDirectory, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string CollectionDirectoryKey(ReadableCollection collection)
+    {
+        return (collection.RequestDirectory ?? string.Empty).Replace('\\', '/').TrimEnd('/');
+    }
+
+    private static string ParentDirectoryKey(string relativeDirectory)
+    {
+        return Path.GetDirectoryName(relativeDirectory)?.Replace('\\', '/').TrimEnd('/') ?? string.Empty;
+    }
+
+    private static bool IsRootCollection(ReadableCollection collection)
+    {
+        return string.Equals(collection.Id, RootCollectionId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(CollectionDirectoryKey(collection), RootCollectionDirectory, StringComparison.OrdinalIgnoreCase);
     }
 
     private void AddDiscoveredSpecifications()
@@ -2428,6 +2822,41 @@ public sealed class ApiClientWorkspaceState
                     Format = format,
                     Path = relativePath
                 });
+            }
+        }
+    }
+
+    private void AddDiscoveredEnvironments()
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+
+        var environmentDirectory = Path.Combine(WorkspacePath, "environments");
+        if (!Directory.Exists(environmentDirectory))
+        {
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(environmentDirectory, "*.json", SearchOption.AllDirectories))
+        {
+            try
+            {
+                using var stream = File.OpenRead(file);
+                var environment = JsonSerializer.Deserialize<ReadableEnvironment>(stream, ReadableHttpJsonStorage.JsonOptions);
+                if (environment is null
+                    || Workspace.Environments.Any(item =>
+                        string.Equals(item.Id, environment.Id, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(item.Name, environment.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                Workspace.Environments.Add(environment);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+            {
             }
         }
     }
@@ -2686,7 +3115,8 @@ public sealed class ApiClientWorkspaceState
             Headers = request.Headers.Select(CloneNameValue).ToList(),
             Form = request.Body?.Type == ReadableBodyType.MultipartFormData
                 ? request.Body.Multipart.Select(CloneMultipartAsNameValue).ToList()
-                : request.Body?.Form.Select(CloneNameValue).ToList() ?? []
+                : request.Body?.Form.Select(CloneNameValue).ToList() ?? [],
+            Auth = CloneAuth(request.Auth)
         };
     }
 
@@ -2711,7 +3141,7 @@ public sealed class ApiClientWorkspaceState
     {
         if (tab.Origin == RequestTabOrigin.CollectionConfig)
         {
-            SelectedCollection = Collections.FirstOrDefault(collection => string.Equals(collection.Id, tab.CollectionId, StringComparison.OrdinalIgnoreCase));
+            SelectedCollection = FindCollectionById(tab.CollectionId);
             SelectedRequest = null;
             return;
         }
@@ -2729,7 +3159,7 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
-        SelectedCollection = Collections.FirstOrDefault(collection => string.Equals(collection.Id, tab.CollectionId, StringComparison.OrdinalIgnoreCase));
+        SelectedCollection = FindCollectionById(tab.CollectionId);
         SelectedRequest = SelectedCollection?.Requests.FirstOrDefault(request =>
             string.Equals(GetRequestSourceKey(SelectedCollection, request), tab.SourceKey, StringComparison.OrdinalIgnoreCase)
             || string.Equals(request.Id, tab.RequestId, StringComparison.OrdinalIgnoreCase));
@@ -2744,6 +3174,7 @@ public sealed class ApiClientWorkspaceState
         request.Query = updated.Query;
         request.Headers = updated.Headers;
         request.Body = updated.Body;
+        request.Auth = updated.Auth;
     }
 
     private static ReadableRequest BuildRequestFromTab(RequestWorkspaceTab tab)
@@ -2755,7 +3186,8 @@ public sealed class ApiClientWorkspaceState
             Url = tab.Url,
             Query = tab.Query.Select(CloneNameValue).ToList(),
             Headers = tab.Headers.Select(CloneNameValue).ToList(),
-            Body = BuildBodyFromTab(tab)
+            Body = BuildBodyFromTab(tab),
+            Auth = CloneAuth(tab.Auth)
         };
     }
 
@@ -2809,6 +3241,11 @@ public sealed class ApiClientWorkspaceState
     private static bool ShouldAppendStreamLine(ReadableStreamMessage message)
     {
         if (string.IsNullOrEmpty(message.Data))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(message.Raw))
         {
             return false;
         }
@@ -2923,6 +3360,43 @@ public sealed class ApiClientWorkspaceState
         };
     }
 
+    private static ReadableAuth? CloneAuth(ReadableAuth? auth)
+    {
+        if (auth is null)
+        {
+            return null;
+        }
+
+        var json = JsonSerializer.Serialize(auth, ReadableHttpJsonStorage.JsonOptions);
+        return JsonSerializer.Deserialize<ReadableAuth>(json, ReadableHttpJsonStorage.JsonOptions);
+    }
+
+    private static void EnsureAuthOptions(ReadableAuth auth)
+    {
+        if (auth.Type == ReadableAuthType.OAuth1)
+        {
+            auth.OAuth1 ??= new ReadableOAuth1Options();
+        }
+        else if (auth.Type == ReadableAuthType.OAuth2)
+        {
+            auth.OAuth2 ??= new ReadableOAuth2Options();
+        }
+    }
+
+    private static ReadableOAuth1Options EnsureOAuth1(ReadableAuth auth)
+    {
+        auth.Type = ReadableAuthType.OAuth1;
+        auth.OAuth1 ??= new ReadableOAuth1Options();
+        return auth.OAuth1;
+    }
+
+    private static ReadableOAuth2Options EnsureOAuth2(ReadableAuth auth)
+    {
+        auth.Type = ReadableAuthType.OAuth2;
+        auth.OAuth2 ??= new ReadableOAuth2Options();
+        return auth.OAuth2;
+    }
+
     private static string DefaultContentType(ReadableBodyType type)
     {
         return type switch
@@ -2965,11 +3439,11 @@ public sealed class ApiClientWorkspaceState
         await SaveActiveRequestAsNewAsync();
     }
 
-    private ReadableCollection GetOrCreateUngroupedCollection()
+    private ReadableCollection GetOrCreateRootCollection()
     {
         var collection = Collections.FirstOrDefault(item =>
-            string.Equals(item.Id, UngroupedCollectionId, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(item.RequestDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase));
+            string.Equals(item.Id, RootCollectionId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(item.RequestDirectory, RootCollectionDirectory, StringComparison.OrdinalIgnoreCase));
         if (collection is not null)
         {
             return collection;
@@ -2977,10 +3451,10 @@ public sealed class ApiClientWorkspaceState
 
         collection = new ReadableCollection
         {
-            Id = UngroupedCollectionId,
-            Name = UngroupedCollectionName,
+            Id = RootCollectionId,
+            Name = RootCollectionDirectory,
             SourceType = ReadableCollectionSourceType.Local,
-            RequestDirectory = UngroupedCollectionDirectory
+            RequestDirectory = RootCollectionDirectory
         };
         Collections.Insert(0, collection);
         if (Workspace is not null)
@@ -2994,7 +3468,7 @@ public sealed class ApiClientWorkspaceState
     private static bool ShouldRenameCollectionDirectory(ReadableCollection collection)
     {
         if (string.IsNullOrWhiteSpace(collection.RequestDirectory)
-            || string.Equals(collection.RequestDirectory, UngroupedCollectionDirectory, StringComparison.OrdinalIgnoreCase))
+            || string.Equals(collection.RequestDirectory, RootCollectionDirectory, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -3009,7 +3483,7 @@ public sealed class ApiClientWorkspaceState
     {
         var name = baseName;
         var index = 2;
-        while (Collections.Any(collection => string.Equals(collection.Name, name, StringComparison.OrdinalIgnoreCase)))
+        while (EnumerateCollections(Collections).Any(collection => string.Equals(collection.Name, name, StringComparison.OrdinalIgnoreCase)))
         {
             name = $"{baseName} {index}";
             index++;
@@ -3124,6 +3598,7 @@ public sealed class ApiClientWorkspaceState
             }
         };
         MergeVariables(context.Variables, Workspace?.Variables);
+        MergeVariables(context.Variables, SelectedEnvironment?.Variables);
         MergeVariables(context.Variables, SelectedCollection?.Variables);
         if (ActiveRequestTab is { } tab)
         {
@@ -3174,6 +3649,7 @@ public sealed class ApiClientWorkspaceState
     {
         Directory.CreateDirectory(workspacePath);
         Directory.CreateDirectory(Path.Combine(workspacePath, "collections"));
+        Directory.CreateDirectory(Path.Combine(workspacePath, "environments"));
         Directory.CreateDirectory(Path.Combine(workspacePath, "specs"));
     }
 
@@ -3325,6 +3801,11 @@ public sealed class ApiClientWorkspaceState
 
     private Dictionary<string, ReadableVariable>? GetVariableDictionary(string scope)
     {
+        if (scope.StartsWith("environment:", StringComparison.OrdinalIgnoreCase))
+        {
+            return FindEnvironment(scope["environment:".Length..])?.Variables;
+        }
+
         return scope.Equals("collection", StringComparison.OrdinalIgnoreCase)
             ? SelectedCollection?.Variables
             : Workspace?.Variables;
@@ -3347,6 +3828,19 @@ public sealed class ApiClientWorkspaceState
         var name = baseName;
         var index = 2;
         while (variables.ContainsKey(name))
+        {
+            name = $"{baseName}{index}";
+            index++;
+        }
+
+        return name;
+    }
+
+    private string NextEnvironmentName(string baseName)
+    {
+        var name = baseName;
+        var index = 2;
+        while (Environments.Any(environment => string.Equals(environment.Name, name, StringComparison.OrdinalIgnoreCase)))
         {
             name = $"{baseName}{index}";
             index++;
@@ -3544,24 +4038,18 @@ public sealed class ApiClientWorkspaceState
         try
         {
             using var document = JsonDocument.Parse(ResponseText);
-            var selected = ResolveResponseElement(document.RootElement, ResponseNodePath);
-            if (selected.ValueKind == JsonValueKind.Object)
-            {
-                return selected.EnumerateObject()
-                    .Select(property => property.Name)
-                    .Take(24)
-                    .ToList();
-            }
-
-            if (selected.ValueKind == JsonValueKind.Array)
-            {
-                return selected.EnumerateArray()
-                    .Select((_, index) => $"[{index}]")
-                    .Take(24)
-                    .ToList();
-            }
+            return GetJsonNodeKeys(ResolveResponseElement(document.RootElement, ResponseNodePath));
         }
         catch (JsonException)
+        {
+            if (TryGetStreamedJsonNodeKeys(ResponseText, ResponseNodePath, out var streamedKeys))
+            {
+                return streamedKeys;
+            }
+
+            EnsureActiveRequestTab().ResponseNodePath = "root";
+        }
+        catch (InvalidOperationException)
         {
             EnsureActiveRequestTab().ResponseNodePath = "root";
         }
@@ -3579,10 +4067,16 @@ public sealed class ApiClientWorkspaceState
         try
         {
             using var document = JsonDocument.Parse(ResponseText);
-            return FormatJsonElement(ResolveResponseElement(document.RootElement, ResponseNodePath));
+            return FormatResponseElement(ResolveResponseElement(document.RootElement, ResponseNodePath));
         }
         catch (JsonException)
         {
+            var streamedText = GetStreamedJsonSelectedText(ResponseText, ResponseNodePath);
+            if (streamedText is not null)
+            {
+                return streamedText;
+            }
+
             EnsureActiveRequestTab().ResponseNodePath = "root";
         }
         catch (InvalidOperationException)
@@ -3591,6 +4085,80 @@ public sealed class ApiClientWorkspaceState
         }
 
         return TryFormatJson(ResponseText);
+    }
+
+    private static List<string> GetJsonNodeKeys(JsonElement selected)
+    {
+        if (selected.ValueKind == JsonValueKind.Object)
+        {
+            return selected.EnumerateObject()
+                .Select(property => property.Name)
+                .Take(24)
+                .ToList();
+        }
+
+        if (selected.ValueKind == JsonValueKind.Array)
+        {
+            return selected.EnumerateArray()
+                .Select((_, index) => $"[{index}]")
+                .Take(24)
+                .ToList();
+        }
+
+        return [];
+    }
+
+    private static bool TryGetStreamedJsonNodeKeys(string responseText, string responseNodePath, out List<string> keys)
+    {
+        keys = [];
+        var values = ParseStreamedJsonValues(responseText);
+        if (values.Count == 0)
+        {
+            return false;
+        }
+
+        using var document = JsonDocument.Parse("[" + string.Join(",", values) + "]");
+        keys = GetJsonNodeKeys(ResolveResponseElement(document.RootElement, responseNodePath));
+        return true;
+    }
+
+    private static string? GetStreamedJsonSelectedText(string responseText, string responseNodePath)
+    {
+        var values = ParseStreamedJsonValues(responseText);
+        if (values.Count == 0)
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse("[" + string.Join(",", values) + "]");
+        return FormatResponseElement(ResolveResponseElement(document.RootElement, responseNodePath));
+    }
+
+    private static List<string> ParseStreamedJsonValues(string responseText)
+    {
+        var values = new List<string>();
+        foreach (var line in responseText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var candidate = line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                ? line["data:".Length..].Trim()
+                : line;
+            if (string.IsNullOrWhiteSpace(candidate) || candidate == "[DONE]")
+            {
+                continue;
+            }
+
+            try
+            {
+                using var _ = JsonDocument.Parse(candidate);
+                values.Add(candidate);
+            }
+            catch (JsonException)
+            {
+                return [];
+            }
+        }
+
+        return values;
     }
 
     private static JsonElement ResolveResponseElement(JsonElement root, string path)
@@ -3656,6 +4224,16 @@ public sealed class ApiClientWorkspaceState
     private static string FormatJsonElement(JsonElement element)
     {
         return JsonSerializer.Serialize(element, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static string FormatResponseElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString() ?? string.Empty,
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null => element.GetRawText(),
+            _ => FormatJsonElement(element)
+        };
     }
 
     private static List<PipelinePhase> CreatePipelinePhases(IReadOnlyCollection<ReadableExchangeTiming> timings)
