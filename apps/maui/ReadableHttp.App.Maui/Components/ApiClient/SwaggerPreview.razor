@@ -12,6 +12,7 @@
             <span class="version-pill">v1</span>
         </div>
         <div class="swagger-links">
+            <button @onclick="OnImportAsCollection">Import Collection</button>
             <button @onclick="OnShowRaw">Raw</button>
         </div>
     </header>
@@ -52,7 +53,7 @@
                             @if (ExpandedOperationKey == operationKey)
                             {
                                 <div class="endpoint-detail">
-                                    <p>@operation.Name endpoint generated from @ActiveSource. Open it in Request to edit parameters, body, auth, and send it.</p>
+                                    <p>@OperationDescription(operation)</p>
                                     <div class="endpoint-section">
                                         <span>Parameters</span>
                                         <table class="spec-table">
@@ -60,20 +61,35 @@
                                                 <tr><th>Name</th><th>In</th><th>Type</th><th>Req.</th><th>Description</th></tr>
                                             </thead>
                                             <tbody>
-                                                <tr><td>id</td><td><i class="in-badge path">path</i></td><td><i class="type-pill string">string</i></td><td>●</td><td>Resource identifier</td></tr>
-                                                <tr><td>include</td><td><i class="in-badge query">query</i></td><td><i class="type-pill string">string</i></td><td>○</td><td>Related resources to include</td></tr>
+                                                @foreach (var parameter in OperationParameters(operation))
+                                                {
+                                                    <tr @key="parameter">
+                                                        <td>@parameter.Name</td>
+                                                        <td><i class="in-badge @parameter.Location">@parameter.Location</i></td>
+                                                        <td><i class="type-pill string">@parameter.Type</i></td>
+                                                        <td>@(parameter.Required ? "●" : "○")</td>
+                                                        <td>@parameter.Description</td>
+                                                    </tr>
+                                                }
+                                                @if (OperationParameters(operation).Count == 0)
+                                                {
+                                                    <tr><td colspan="5">No parameters declared on this operation.</td></tr>
+                                                }
                                             </tbody>
                                         </table>
                                     </div>
                                     <div class="endpoint-section">
                                         <span>Responses</span>
                                         <div class="response-list">
-                                            <div><strong class="ok">200</strong><span>Successful response</span><em>@operation.Name</em></div>
-                                            <div><strong class="warn">401</strong><span>Missing or invalid authentication</span><em>ErrorResponse</em></div>
+                                            <div><strong class="ok">2xx</strong><span>Response schema is not available in the normalized try model.</span><em>@ResponseHint(operation)</em></div>
+                                            @if (RequiresAuth(operation))
+                                            {
+                                                <div><strong class="warn">401</strong><span>Authentication may be required.</span><em>Auth</em></div>
+                                            }
                                         </div>
                                     </div>
                                     <div class="endpoint-actions">
-                                        <button @onclick="() => OnSelectOperation.InvokeAsync(operation)">Open in Request</button>
+                                        <button @onclick="() => OnSelectOperation.InvokeAsync(operation)">Try</button>
                                     </div>
                                 </div>
                             }
@@ -92,6 +108,7 @@
     [Parameter] public IReadOnlyList<ReadableTryOperation> Operations { get; set; } = [];
     [Parameter] public string? ExpandedOperationKey { get; set; }
     [Parameter] public EventCallback OnShowRaw { get; set; }
+    [Parameter] public EventCallback OnImportAsCollection { get; set; }
     [Parameter] public EventCallback OnLoadTryDocument { get; set; }
     [Parameter] public EventCallback<ReadableTryOperation> OnToggleEndpoint { get; set; }
     [Parameter] public EventCallback<ReadableTryOperation> OnSelectOperation { get; set; }
@@ -112,4 +129,60 @@
             ? "General"
             : char.ToUpperInvariant(segment[0]) + segment[1..];
     }
+
+    private static IReadOnlyList<SwaggerParameterRow> OperationParameters(ReadableTryOperation operation)
+    {
+        var rows = new List<SwaggerParameterRow>();
+        rows.AddRange(ExtractPathParameters(operation.Path));
+        rows.AddRange(operation.Request.Query.Select(item => new SwaggerParameterRow(
+            item.Name,
+            "query",
+            "string",
+            false,
+            string.IsNullOrWhiteSpace(item.Value) ? "Query parameter" : item.Value ?? string.Empty)));
+        rows.AddRange(operation.Request.Headers.Select(item => new SwaggerParameterRow(
+            item.Name,
+            "header",
+            "string",
+            item.Name.StartsWith("Authorization", StringComparison.OrdinalIgnoreCase),
+            string.IsNullOrWhiteSpace(item.Value) ? "Header" : item.Value ?? string.Empty)));
+
+        if (operation.Request.Body is { Type: not ReadableBodyType.None } body)
+        {
+            rows.Add(new SwaggerParameterRow("body", "body", body.Type.ToString(), true, body.ContentType ?? "Request body"));
+        }
+
+        return rows;
+    }
+
+    private static IEnumerable<SwaggerParameterRow> ExtractPathParameters(string path)
+    {
+        foreach (var segment in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment.Length > 2 && segment[0] == '{' && segment[^1] == '}')
+            {
+                yield return new SwaggerParameterRow(segment[1..^1], "path", "string", true, "Path parameter");
+            }
+        }
+    }
+
+    private static string OperationDescription(ReadableTryOperation operation)
+    {
+        return string.IsNullOrWhiteSpace(operation.Summary)
+            ? $"{operation.Name} endpoint generated from try model. Use Try to edit parameters, body, auth, and send it."
+            : operation.Summary;
+    }
+
+    private static string ResponseHint(ReadableTryOperation operation)
+    {
+        return operation.Request.Body?.ContentType ?? operation.Request.Body?.Type.ToString() ?? operation.Name;
+    }
+
+    private static bool RequiresAuth(ReadableTryOperation operation)
+    {
+        return operation.Request.Auth?.Type is not null and not ReadableAuthType.None
+            || operation.Request.Headers.Any(header => header.Name.Contains("Authorization", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private sealed record SwaggerParameterRow(string Name, string Location, string Type, bool Required, string Description);
 }

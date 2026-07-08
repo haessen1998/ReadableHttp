@@ -24,10 +24,31 @@ public sealed class ReadableHttpMafAgent : IReadableHttpAiAgent
 
         if (lowerPrompt.Contains("参数", StringComparison.Ordinal)
             || lowerPrompt.Contains("parameter", StringComparison.Ordinal)
+            || lowerPrompt.Contains("调整", StringComparison.Ordinal)
+            || lowerPrompt.Contains("修改", StringComparison.Ordinal)
             || lowerPrompt.Contains("params", StringComparison.Ordinal))
         {
             result.AssistantMessage = BuildParameterMessage(context);
             AddPatchAction(result, BuildParameterPatch(context));
+            return Task.FromResult(result);
+        }
+
+        if (lowerPrompt.Contains("失败", StringComparison.Ordinal)
+            || lowerPrompt.Contains("错误", StringComparison.Ordinal)
+            || lowerPrompt.Contains("原因", StringComparison.Ordinal)
+            || lowerPrompt.Contains("结果", StringComparison.Ordinal)
+            || lowerPrompt.Contains("response", StringComparison.Ordinal)
+            || lowerPrompt.Contains("explain", StringComparison.Ordinal)
+            || lowerPrompt.Contains("error", StringComparison.Ordinal)
+            || lowerPrompt.Contains("fail", StringComparison.Ordinal))
+        {
+            result.AssistantMessage = BuildResponseExplanation(context);
+            result.Actions.Add(ApplyPolicy(new ReadableAiAction
+            {
+                Kind = ReadableAiActionKind.ExplainResponse,
+                Title = "解释当前响应",
+                Summary = "读取当前请求和响应快照，分析状态、响应体和可能的失败原因。"
+            }));
             return Task.FromResult(result);
         }
 
@@ -166,6 +187,34 @@ public sealed class ReadableHttpMafAgent : IReadableHttpAiAgent
         }
 
         return $"找到 {context.RecentExchanges.Count} 条相关消息记录。我会优先比较状态码、耗时、headers、query 和 body 差异。";
+    }
+
+    private static string BuildResponseExplanation(ReadableAiWorkspaceContext context)
+    {
+        var exchange = context.CurrentExchange ?? context.RecentExchanges.FirstOrDefault();
+        if (exchange?.Response is null)
+        {
+            return "当前还没有响应结果。先发送请求后，我可以读取 response、状态码和请求参数来分析失败原因。";
+        }
+
+        var request = exchange.Request ?? context.CurrentRequest;
+        var statusCode = exchange.Response.StatusCode;
+        var body = exchange.Response.BodyText ?? string.Empty;
+        var statusSummary = statusCode switch
+        {
+            >= 500 => "服务端错误，优先检查接口日志、上游依赖和请求 body 是否满足后端约束。",
+            >= 400 => "客户端请求可能不符合接口要求，优先检查认证、路径参数、query、headers 和 body。",
+            >= 300 => "响应是重定向，检查 Location、代理配置以及是否需要跟随跳转。",
+            >= 200 => "请求已成功返回，可以继续检查响应字段是否符合预期。",
+            _ => "没有明确 HTTP 状态码，可能是网络异常、取消或本地执行失败。"
+        };
+
+        var bodyHint = string.IsNullOrWhiteSpace(body)
+            ? "响应体为空。"
+            : $"响应体约 {body.Length} 个字符，我会优先关注 error/message/code/detail 等字段。";
+        var requestHint = request is null ? "当前没有请求快照。" : $"当前请求是 {request.Method} {request.Url}。";
+
+        return $"{requestHint}\n{statusSummary}\n{bodyHint}";
     }
 
     private static string BuildSearchMessage(ReadableAiWorkspaceContext context, string prompt)

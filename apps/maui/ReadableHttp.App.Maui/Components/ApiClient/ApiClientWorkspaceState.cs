@@ -4,6 +4,7 @@ using ReadableHttp.Execution;
 using ReadableHttp.Storage;
 using ReadableHttp.Try;
 using System.Diagnostics;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace ReadableHttp.App.Maui.Components.ApiClient;
@@ -22,6 +23,11 @@ public sealed class ApiClientWorkspaceState
     public const string FontSmall = "small";
     public const string FontMedium = "medium";
     public const string FontLarge = "large";
+    private static readonly JsonSerializerOptions JsonDisplayOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     private readonly AppSettingsStore _settingsStore;
     private readonly AppFilePicker _filePicker;
@@ -47,9 +53,13 @@ public sealed class ApiClientWorkspaceState
     public string RawContent { get; private set; } = string.Empty;
     public string ViewMode { get; private set; } = "request";
     public string RequestTab => ActiveRequestTab?.RequestSectionTab ?? "Params";
+    public string ResponseTab => ActiveRequestTab?.ResponseSectionTab ?? "Response";
     public string Method { get => ActiveRequestTab?.Method ?? "GET"; set => SetMethod(value); }
     public string Url { get => ActiveRequestTab?.Url ?? string.Empty; set => SetUrl(value); }
     public string BodyText { get => ActiveRequestTab?.BodyText ?? string.Empty; set => SetBodyText(value); }
+    public string PreRequestScript { get => ActiveRequestTab?.PreRequestScript ?? string.Empty; set => SetPreRequestScript(value); }
+    public string TestScript { get => ActiveRequestTab?.TestScript ?? string.Empty; set => SetTestScript(value); }
+    public string AssertText { get => ActiveRequestTab?.AssertText ?? string.Empty; set => SetAssertText(value); }
     public string BodyType => ActiveRequestTab?.BodyType.ToString() ?? ReadableBodyType.None.ToString();
     public string BodyContentType => ActiveRequestTab?.BodyContentType ?? string.Empty;
     public IReadOnlyList<ReadableNameValue> RequestQuery => ActiveRequestTab?.Query ?? [];
@@ -99,6 +109,8 @@ public sealed class ApiClientWorkspaceState
     public List<ActivityEntry> ActivityLog { get; private set; } = [new("Ready", "等待加载 workspace 或导入文件")];
     public List<AiChatMessage> AiMessages { get; private set; } = [new("assistant", "我可以根据当前 request、response 或 spec 帮你整理参数、生成测试用例和解释错误。")];
     public List<ReadableAiAction> PendingAiActions { get; private set; } = [];
+    public List<HistoryRecord> HistoryRecords { get; private set; } = [];
+    public string? ExpandedHistoryRecordId { get; private set; }
     public List<PipelinePhase> PipelinePhases => ActiveRequestTab?.PipelinePhases ?? [];
     public List<RequestWorkspaceTab> RequestTabs { get; private set; } = [];
     public string? ActiveRequestTabId { get; private set; }
@@ -334,6 +346,30 @@ public sealed class ApiClientWorkspaceState
         {
             SelectedRequest.Body = BuildBodyFromTab(tab);
         }
+        NotifyChanged();
+    }
+
+    public void SetPreRequestScript(string value)
+    {
+        var tab = EnsureActiveRequestTab();
+        tab.PreRequestScript = value;
+        tab.IsDirty = true;
+        NotifyChanged();
+    }
+
+    public void SetTestScript(string value)
+    {
+        var tab = EnsureActiveRequestTab();
+        tab.TestScript = value;
+        tab.IsDirty = true;
+        NotifyChanged();
+    }
+
+    public void SetAssertText(string value)
+    {
+        var tab = EnsureActiveRequestTab();
+        tab.AssertText = value;
+        tab.IsDirty = true;
         NotifyChanged();
     }
 
@@ -908,6 +944,8 @@ public sealed class ApiClientWorkspaceState
                 "switchWorkspace" => "Switch workspace",
                 "unavailable" => "Unavailable",
                 "hideSidebar" => "Hide sidebar",
+                "resizeSidebar" => "Resize sidebar",
+                "resizeInspector" => "Resize inspector",
                 "gitWorkspace" => "Git workspace",
                 "noMatchingCollections" => "No matching collections.",
                 "createOrLoadCollection" => "Create or load a collection.",
@@ -1026,6 +1064,8 @@ public sealed class ApiClientWorkspaceState
             "switchWorkspace" => "快速切换工作区",
             "unavailable" => "不可用",
             "hideSidebar" => "隐藏左栏",
+            "resizeSidebar" => "调整左栏宽度",
+            "resizeInspector" => "调整右栏宽度",
             "gitWorkspace" => "Git 工作区",
             "noMatchingCollections" => "没有匹配的集合。",
             "createOrLoadCollection" => "创建或加载集合。",
@@ -1400,6 +1440,11 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
+        if (mode is not (RightPanelMode.Ai or RightPanelMode.History))
+        {
+            mode = RightPanelMode.Ai;
+        }
+
         RightPanelMode = mode;
         ShowInspector = true;
         NotifyChanged();
@@ -1497,6 +1542,43 @@ public sealed class ApiClientWorkspaceState
         NotifyChanged();
     }
 
+    public async Task ImportSpecAsCollectionAsync()
+    {
+        if (Workspace is null)
+        {
+            AddActivity("Spec", "请先加载 workspace 后再导入 collection");
+            NotifyChanged();
+            return;
+        }
+
+        if (Operations.Count == 0)
+        {
+            AddActivity("Spec", "当前文档没有可导入的请求");
+            NotifyChanged();
+            return;
+        }
+
+        var collection = new ReadableCollection
+        {
+            Name = string.IsNullOrWhiteSpace(DocumentTitle) ? "Imported Spec" : DocumentTitle,
+            SourceType = ReadableCollectionSourceType.Local,
+            RequestDirectory = $"collections/{ToFileName(DocumentTitle)}",
+            Requests = Operations.Select(operation =>
+            {
+                var request = CloneRequest(operation.Request);
+                request.Name = string.IsNullOrWhiteSpace(operation.Name) ? $"{operation.Method} {operation.Path}" : operation.Name;
+                return request;
+            }).ToList()
+        };
+
+        Collections.Add(collection);
+        Workspace.Collections.Add(collection);
+        SelectedCollection = collection;
+        await SaveWorkspaceAsync();
+        AddActivity("Spec", $"已导入 {collection.Requests.Count} 个请求到 collection");
+        NotifyChanged();
+    }
+
     public async Task SendAsync()
     {
         IsSending = true;
@@ -1532,6 +1614,7 @@ public sealed class ApiClientWorkspaceState
         {
             IsSending = false;
             tab.PipelinePhases = CreateStreamingPipelinePhases(startedAt, "Completed");
+            AddHistoryRecord(tab, startedAt);
             await NotifyChangedAsync();
         }
     }
@@ -2375,6 +2458,20 @@ public sealed class ApiClientWorkspaceState
         NotifyChanged();
     }
 
+    public void SetResponseTab(string key)
+    {
+        EnsureActiveRequestTab().ResponseSectionTab = key;
+        NotifyChanged();
+    }
+
+    public void ToggleHistoryRecord(string id)
+    {
+        ExpandedHistoryRecordId = string.Equals(ExpandedHistoryRecordId, id, StringComparison.Ordinal)
+            ? null
+            : id;
+        NotifyChanged();
+    }
+
     public void SelectResponseNode(string path)
     {
         var tab = EnsureActiveRequestTab();
@@ -2458,6 +2555,12 @@ public sealed class ApiClientWorkspaceState
         NotifyChanged();
     }
 
+    public async Task SendAiQuickPrompt(string prompt)
+    {
+        AiDraft = prompt;
+        await SendAiMessage();
+    }
+
     public void ApplyAiAction(string actionId)
     {
         var action = PendingAiActions.FirstOrDefault(item => string.Equals(item.Id, actionId, StringComparison.Ordinal));
@@ -2491,7 +2594,7 @@ public sealed class ApiClientWorkspaceState
             WorkspacePath = WorkspacePath,
             CurrentRequest = ActiveRequestTab is null ? null : BuildRequestFromTab(ActiveRequestTab),
             CurrentExchange = BuildCurrentExchangeSnapshot(),
-            RecentExchanges = BuildCurrentExchangeSnapshot() is { } exchange ? [exchange] : [],
+            RecentExchanges = HistoryRecords.Select(record => record.Exchange).Take(8).ToList(),
             Collections = Collections,
             Specifications = Specifications,
             ViewMode = ViewMode
@@ -2505,12 +2608,49 @@ public sealed class ApiClientWorkspaceState
             return null;
         }
 
+        return BuildExchangeSnapshot(ActiveRequestTab);
+    }
+
+    private void AddHistoryRecord(RequestWorkspaceTab tab, DateTimeOffset startedAt)
+    {
+        var exchange = BuildExchangeSnapshot(tab);
+        var record = new HistoryRecord(
+            Guid.NewGuid().ToString("N"),
+            startedAt,
+            tab.Title,
+            tab.Method,
+            tab.Url,
+            tab.StatusText,
+            tab.CollectionId,
+            tab.RequestId,
+            exchange);
+
+        HistoryRecords.Insert(0, record);
+        if (HistoryRecords.Count > 80)
+        {
+            HistoryRecords.RemoveRange(80, HistoryRecords.Count - 80);
+        }
+    }
+
+    private static int ParseStatusCode(string statusText)
+    {
+        var digits = new string(statusText.SkipWhile(character => !char.IsDigit(character))
+            .TakeWhile(char.IsDigit)
+            .ToArray());
+        return int.TryParse(digits, out var statusCode) ? statusCode : 0;
+    }
+
+    private ReadableExchange BuildExchangeSnapshot(RequestWorkspaceTab tab)
+    {
         return new ReadableExchange
         {
-            Request = BuildRequestFromTab(ActiveRequestTab),
+            Request = BuildRequestFromTab(tab),
             Response = new ReadableResponse
             {
-                BodyText = ActiveRequestTab.ResponseText
+                StatusCode = ParseStatusCode(tab.StatusText),
+                ReasonPhrase = tab.StatusText,
+                BodyText = tab.ResponseText,
+                Size = tab.ResponseText.Length
             }
         };
     }
@@ -4223,7 +4363,7 @@ public sealed class ApiClientWorkspaceState
 
     private static string FormatJsonElement(JsonElement element)
     {
-        return JsonSerializer.Serialize(element, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(element, JsonDisplayOptions);
     }
 
     private static string FormatResponseElement(JsonElement element)

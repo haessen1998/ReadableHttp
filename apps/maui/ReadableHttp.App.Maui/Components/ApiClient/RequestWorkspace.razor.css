@@ -551,13 +551,15 @@
     border-bottom: 1px solid var(--line);
     background: var(--panel);
     min-width: 0;
-    overflow-x: auto;
+    overflow: hidden;
     padding: 0 12px;
 }
 
 .editor-tabs button {
+    flex: 0 1 auto;
     position: relative;
     height: 42px;
+    min-width: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -899,10 +901,38 @@
 
 .split-editor {
     display: grid;
-    grid-template-columns: minmax(320px, 48%) minmax(0, 1fr);
+    grid-template-columns: minmax(360px, var(--request-editor-width, 48%)) 9px minmax(420px, 1fr);
     gap: 0;
     min-height: 0;
     padding-top: 0;
+}
+
+.split-editor.full-response {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.request-split-resizer {
+    position: relative;
+    z-index: 5;
+    min-width: 9px;
+    cursor: col-resize;
+    background: var(--bg);
+    touch-action: none;
+}
+
+.request-split-resizer::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 4px;
+    width: 1px;
+    background: var(--line);
+}
+
+.request-split-resizer:hover::before,
+.request-split-resizer:focus-visible::before {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .editor-pane {
@@ -923,6 +953,10 @@
 
 .response-pane {
     grid-template-rows: 42px auto minmax(0, 1fr);
+}
+
+.full-response .response-pane {
+    border-width: 0;
 }
 
 .pane-header {
@@ -960,6 +994,11 @@
 
 .response-crumbs button:last-child {
     background: rgba(0, 229, 255, 0.06);
+    color: var(--accent);
+}
+
+.response-crumbs button.active {
+    background: rgba(0, 229, 255, 0.1);
     color: var(--accent);
 }
 
@@ -1124,6 +1163,42 @@ textarea,
     background: var(--code-bg);
 }
 
+.request-preview {
+    min-height: 0;
+    background: var(--code-bg);
+}
+
+.request-preview pre {
+    height: 100%;
+    white-space: pre-wrap;
+}
+
+.vars-grid,
+.script-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.script-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(120px, 1fr);
+    gap: 6px;
+    min-height: 0;
+    color: var(--muted);
+}
+
+.script-editor textarea {
+    min-height: 140px;
+    border: 1px solid var(--line-soft);
+    border-radius: 5px;
+}
+
+.assert-editor {
+    min-height: 220px;
+}
+
 .json-node-bar {
     display: flex;
     gap: 6px;
@@ -1212,6 +1287,10 @@ textarea,
 
     .split-editor {
         grid-template-columns: 1fr;
+    }
+
+    .request-split-resizer {
+        display: none;
     }
 
     .auth-grid {

@@ -10,6 +10,12 @@
                   UrlChanged="@State.SetUrl"
                   BodyText="@State.BodyText"
                   BodyTextChanged="@State.SetBodyText"
+                  PreRequestScript="@State.PreRequestScript"
+                  PreRequestScriptChanged="@State.SetPreRequestScript"
+                  TestScript="@State.TestScript"
+                  TestScriptChanged="@State.SetTestScript"
+                  AssertText="@State.AssertText"
+                  AssertTextChanged="@State.SetAssertText"
                   OnFormatBody="@State.FormatBody"
                   BodyType="@State.BodyType"
                   BodyTypeChanged="@State.SetBodyType"
@@ -27,6 +33,7 @@
                   ViewMode="@State.ViewMode"
                   RawContent="@State.RawContent"
                   RequestTab="@State.RequestTab"
+                  ResponseTab="@State.ResponseTab"
                   RequestName="@State.RequestName"
                   RequestNameChanged="@State.SetRequestName"
                   WorkspaceName="@State.WorkspaceName"
@@ -116,6 +123,7 @@
                   OnCloseOtherOpenTabs="@State.CloseOtherRequestTabs"
                   OnCloseAllOpenTabs="@State.CloseAllRequestTabs"
                   OnSetRequestTab="@State.SetRequestTab"
+                  OnSetResponseTab="@State.SetResponseTab"
                   OnSelectResponseNode="@State.SelectResponseNode"
                   OnCopySelectedResponse="@State.CopySelectedResponseAsync">
     <PreviewContent>
@@ -125,6 +133,7 @@
                         Operations="@State.Operations"
                         ExpandedOperationKey="@State.ExpandedOperationKey"
                         OnShowRaw="@State.ShowRaw"
+                        OnImportAsCollection="@State.ImportSpecAsCollectionAsync"
                         OnLoadTryDocument="@State.LoadTryDocumentAsync"
                         OnToggleEndpoint="@State.ToggleEndpoint"
                         OnSelectOperation="@State.SelectOperation" />

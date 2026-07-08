@@ -1,11 +1,10 @@
 .sidebar-panel {
     flex: 0 0 auto;
     width: var(--sidebar-width);
-    min-width: 224px;
+    min-width: 260px;
     max-width: 440px;
     min-height: 0;
     overflow: auto;
-    resize: horizontal;
     border-right: 1px solid var(--line);
     background: var(--panel);
     display: flex;

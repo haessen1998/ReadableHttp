@@ -8,6 +8,17 @@ public sealed record PipelinePhase(string Label, int Width, string Color, string
 
 public sealed record AiChatMessage(string Role, string Content);
 
+public sealed record HistoryRecord(
+    string Id,
+    DateTimeOffset StartedAt,
+    string Title,
+    string Method,
+    string Url,
+    string StatusText,
+    string? CollectionId,
+    string? RequestId,
+    ReadableExchange Exchange);
+
 public sealed record EditableNameValueChange(string Kind, int Index, string Field, string? Value);
 
 public sealed record VariableChange(string Scope, int Index, string Field, string? Value);
@@ -81,6 +92,14 @@ public sealed class RequestWorkspaceTab
 
     public string RequestSectionTab { get; set; } = "Params";
 
+    public string ResponseSectionTab { get; set; } = "Response";
+
+    public string PreRequestScript { get; set; } = string.Empty;
+
+    public string TestScript { get; set; } = string.Empty;
+
+    public string AssertText { get; set; } = string.Empty;
+
     public bool IsDirty { get; set; }
 
     public List<PipelinePhase> PipelinePhases { get; set; } = [];
@@ -90,6 +109,7 @@ public enum RightPanelMode
 {
     Docs,
     Ai,
+    History,
     Parameters,
     Settings
 }

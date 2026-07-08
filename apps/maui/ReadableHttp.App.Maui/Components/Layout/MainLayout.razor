@@ -1,10 +1,11 @@
 @inherits LayoutComponentBase
-@implements IDisposable
+@implements IAsyncDisposable
 @inject ApiClientWorkspaceState State
 @inject AppCommandService Commands
+@inject IJSRuntime JS
 
 <main class="api-client-shell @(State.IsDarkTheme ? "theme-dark" : "theme-light") @State.FontSizeClass">
-    <section class="client-workbench @(State.ShowExplorer ? "" : "hide-explorer") @(State.ShowInspector ? "" : "hide-inspector")">
+    <section class="client-workbench @(State.ShowExplorer ? "" : "hide-explorer") @(State.ShowInspector ? "" : "hide-inspector")" @ref="workbenchElement">
         @if (State.ShowExplorer)
         {
             <ExplorerSidebar WorkspacePath="@State.WorkspacePath"
@@ -76,58 +77,70 @@
                              OnDeleteSpecification="@State.DeleteSpecificationAsync"
                              OnShowRaw="@State.ShowRaw"
                              OnSelectSession="@State.SelectSession" />
+            <div class="workbench-resizer left-resizer"
+                 role="separator"
+                 tabindex="0"
+                 title="@State.T("resizeSidebar")"
+                 aria-label="@State.T("resizeSidebar")"></div>
         }
 
         @Body
 
         @if (State.ShowInspector)
         {
+            <div class="workbench-resizer right-resizer"
+                 role="separator"
+                 tabindex="0"
+                 title="@State.T("resizeInspector")"
+                 aria-label="@State.T("resizeInspector")"></div>
             <RightPanelHost Mode="@State.RightPanelMode"
-                            ViewMode="@State.ViewMode"
-                            DocumentTitle="@State.DocumentTitle"
-                            TryFilePath="@State.TryFilePath"
-                            ActiveSource="@State.ActiveSource"
-                            Operations="@State.Operations"
-                            PipelinePhases="@State.PipelinePhases"
-                            PipelineTotalLabel="@State.PipelineTotalLabel"
                             Method="@State.Method"
                             Url="@State.Url"
-                            BodyText="@State.BodyText"
-                            StatusText="@State.StatusText"
-                            WorkspaceName="@State.WorkspaceName"
-                            ProxyMode="@State.ProxyMode"
-                            SettingsDraft="@State.SettingsDraft"
                             T="@State.T"
-                            ThemeModeChanged="@State.SetDraftThemeMode"
-                            ProxyModeChanged="@State.SetDraftProxyMode"
-                            CustomProxyUrlChanged="@State.SetDraftCustomProxyUrl"
-                            CustomProxyUsernameChanged="@State.SetDraftCustomProxyUsername"
-                            CustomProxyPasswordChanged="@State.SetDraftCustomProxyPassword"
-                            DevToolsEnabledChanged="@State.SetDraftDevToolsEnabled"
-                            LanguageChanged="@State.SetDraftLanguage"
-                            FontSizeChanged="@State.SetDraftFontSize"
-                            ActivityLog="@State.ActivityLog"
                             AiMessages="@State.AiMessages"
                             PendingAiActions="@State.PendingAiActions"
                             AiDraft="@State.AiDraft"
+                            HistoryRecords="@State.HistoryRecords"
+                            ExpandedHistoryRecordId="@State.ExpandedHistoryRecordId"
                             AiDraftChanged="@State.SetAiDraft"
                             OnSelectMode="@State.ShowRightPanel"
-                            OnSelectOperation="@State.SelectOperation"
                             OnSendAiMessage="@State.SendAiMessage"
+                            OnSendAiQuickPrompt="@State.SendAiQuickPrompt"
                             OnApplyAiAction="@State.ApplyAiAction"
                             OnDismissAiAction="@State.DismissAiAction"
-                            OnSaveSettings="@State.SaveSettings" />
+                            OnToggleHistoryRecord="@State.ToggleHistoryRecord" />
         }
     </section>
 </main>
 
 @code {
+    private ElementReference workbenchElement;
+    private MainLayoutResizeInterop? resizeInterop;
+    private bool resizeInteropNeedsUpdate = true;
+
     protected override async Task OnInitializedAsync()
     {
         State.Changed += HandleStateChanged;
         State.ChangedAsync += HandleStateChangedAsync;
         Commands.CommandRequested += HandleAppCommandAsync;
         await State.InitializeAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        resizeInteropNeedsUpdate = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!resizeInteropNeedsUpdate)
+        {
+            return;
+        }
+
+        resizeInteropNeedsUpdate = false;
+        resizeInterop ??= new MainLayoutResizeInterop(JS);
+        await resizeInterop.InitializeAsync(workbenchElement);
     }
 
     private async Task HandleAppCommandAsync(AppCommand command)
@@ -182,10 +195,15 @@
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         State.Changed -= HandleStateChanged;
         State.ChangedAsync -= HandleStateChangedAsync;
         Commands.CommandRequested -= HandleAppCommandAsync;
+
+        if (resizeInterop is not null)
+        {
+            await resizeInterop.DisposeAsync();
+        }
     }
 }

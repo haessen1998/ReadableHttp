@@ -295,7 +295,9 @@
     else
     {
         <section class="request-canvas">
-            <div class="split-editor">
+            <div class="@SplitEditorClass">
+                @if (ResponseTab != "Full")
+                {
                 <section class="editor-pane request-pane">
                     <nav class="editor-tabs" aria-label="Request editor tabs">
                         <button class="@RequestTabClass("Info")" @onclick='() => OnSetRequestTab.InvokeAsync("Info")'>@T("requestInfo")</button>
@@ -303,9 +305,9 @@
                         <button class="@RequestTabClass("Body")" @onclick='() => OnSetRequestTab.InvokeAsync("Body")'>Body</button>
                         <button class="@RequestTabClass("Headers")" @onclick='() => OnSetRequestTab.InvokeAsync("Headers")'>Headers <span>@RequestHeaders.Count</span></button>
                         <button class="@RequestTabClass("Auth")" @onclick='() => OnSetRequestTab.InvokeAsync("Auth")'>Auth</button>
-                        <button class="tab-coming" type="button">Vars</button>
-                        <button class="tab-coming" type="button">Script</button>
-                        <button class="tab-coming" type="button">Assert</button>
+                        <button class="@RequestTabClass("Vars")" @onclick='() => OnSetRequestTab.InvokeAsync("Vars")'>Vars</button>
+                        <button class="@RequestTabClass("Script")" @onclick='() => OnSetRequestTab.InvokeAsync("Script")'>Script</button>
+                        <button class="@RequestTabClass("Assert")" @onclick='() => OnSetRequestTab.InvokeAsync("Assert")'>Assert</button>
                         <button class="tab-more" type="button" title="@T("more")">@Icon("chevron")</button>
                         <span class="tab-spacer"></span>
                         @if (RequestTab == "Body")
@@ -402,6 +404,39 @@
                         {
                             @RenderAuthEditor()
                         }
+                        else if (RequestTab == "Vars")
+                        {
+                            <div class="request-form vars-grid">
+                                <section>
+                                    <div class="section-heading-row"><h2>@T("workspaceVariables")</h2></div>
+                                    @RenderVariableEditor("workspace", WorkspaceVariables)
+                                </section>
+                                <section>
+                                    <div class="section-heading-row"><h2>@T("collection")</h2></div>
+                                    @RenderVariableEditor("collection", CollectionVariables)
+                                </section>
+                            </div>
+                        }
+                        else if (RequestTab == "Script")
+                        {
+                            <div class="script-grid">
+                                <label class="script-editor">
+                                    <span>Pre-request</span>
+                                    <textarea value="@PreRequestScript" @onchange="HandlePreRequestScriptChanged" spellcheck="false"></textarea>
+                                </label>
+                                <label class="script-editor">
+                                    <span>Test</span>
+                                    <textarea value="@TestScript" @onchange="HandleTestScriptChanged" spellcheck="false"></textarea>
+                                </label>
+                            </div>
+                        }
+                        else if (RequestTab == "Assert")
+                        {
+                            <label class="script-editor assert-editor">
+                                <span>Assertions</span>
+                                <textarea value="@AssertText" @onchange="HandleAssertTextChanged" spellcheck="false" placeholder="status == 200&#10;json.ok == true"></textarea>
+                            </label>
+                        }
                     </div>
                     @if (RequestTab == "Body"
                         && BodyType != ReadableBodyType.FormUrlEncoded.ToString()
@@ -412,10 +447,19 @@
                         <textarea class="request-body-textarea" value="@BodyText" @onchange="HandleBodyChanged" spellcheck="false"></textarea>
                     }
                 </section>
+                <div class="request-split-resizer" role="separator" tabindex="0" title="Resize request and response"></div>
+                }
                 <section class="editor-pane response-pane">
                     <div class="pane-header">
                         <div class="response-crumbs">
-                            <button @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>response</button>
+                            <button class="@ResponseTabClass("Response")" @onclick='() => OnSetResponseTab.InvokeAsync("Response")'>Response</button>
+                            <button class="@ResponseTabClass("Request")" @onclick='() => OnSetResponseTab.InvokeAsync("Request")'>Request</button>
+                            <button class="@ResponseTabClass("Full")" @onclick='() => OnSetResponseTab.InvokeAsync("Full")'>Full</button>
+                            @if (ResponseTab != "Request")
+                            {
+                                <span>·</span>
+                                <button @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>response</button>
+                            }
                             @foreach (var crumb in ResponseBreadcrumbs())
                             {
                                 <span>›</span>
@@ -429,6 +473,8 @@
                             <button type="button" class="pane-tool-button copy-response-button" title="@T("copy")" @onclick="OnCopySelectedResponse"><span class="fluent-icon">@Icon("copy")</span></button>
                         </div>
                     </div>
+                    @if (ResponseTab == "Response" || ResponseTab == "Full")
+                    {
                     <div class="response-pipeline">
                         <div class="pipeline-heading compact">
                             <span>HttpClient Pipeline</span>
@@ -454,7 +500,14 @@
                             </div>
                         }
                     </div>
-                    @if (string.IsNullOrWhiteSpace(ResponseText))
+                    }
+                    @if (ResponseTab == "Request")
+                    {
+                        <div class="request-preview">
+                            <pre>@RequestPreviewText</pre>
+                        </div>
+                    }
+                    else if (string.IsNullOrWhiteSpace(ResponseText))
                     {
                         <div class="response-empty">
                             <strong>@StatusText</strong>
@@ -493,6 +546,12 @@
     [Parameter] public EventCallback<string> UrlChanged { get; set; }
     [Parameter] public string BodyText { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> BodyTextChanged { get; set; }
+    [Parameter] public string PreRequestScript { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> PreRequestScriptChanged { get; set; }
+    [Parameter] public string TestScript { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> TestScriptChanged { get; set; }
+    [Parameter] public string AssertText { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> AssertTextChanged { get; set; }
     [Parameter] public EventCallback OnFormatBody { get; set; }
     [Parameter] public string BodyType { get; set; } = ReadableBodyType.None.ToString();
     [Parameter] public EventCallback<string> BodyTypeChanged { get; set; }
@@ -511,6 +570,7 @@
     [Parameter] public string RawContent { get; set; } = string.Empty;
     [Parameter] public RenderFragment? PreviewContent { get; set; }
     [Parameter] public string RequestTab { get; set; } = "Params";
+    [Parameter] public string ResponseTab { get; set; } = "Response";
     [Parameter] public string RequestName { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> RequestNameChanged { get; set; }
     [Parameter] public string WorkspaceName { get; set; } = "scratch";
@@ -600,6 +660,7 @@
     [Parameter] public EventCallback<string> OnCloseOtherOpenTabs { get; set; }
     [Parameter] public EventCallback OnCloseAllOpenTabs { get; set; }
     [Parameter] public EventCallback<string> OnSetRequestTab { get; set; }
+    [Parameter] public EventCallback<string> OnSetResponseTab { get; set; }
     [Parameter] public EventCallback<ResponseNodeSelectedEventArgs> OnSelectResponseNode { get; set; }
     [Parameter] public EventCallback OnCopySelectedResponse { get; set; }
 
@@ -838,6 +899,21 @@
         await BodyTextChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
     }
 
+    private async Task HandlePreRequestScriptChanged(ChangeEventArgs args)
+    {
+        await PreRequestScriptChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleTestScriptChanged(ChangeEventArgs args)
+    {
+        await TestScriptChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
+    private async Task HandleAssertTextChanged(ChangeEventArgs args)
+    {
+        await AssertTextChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
+    }
+
     private async Task HandleBodyTypeChanged(ChangeEventArgs args)
     {
         await BodyTypeChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
@@ -879,6 +955,24 @@
     private async Task HandleFontSizeChanged(ChangeEventArgs args) => await FontSizeChanged.InvokeAsync(Convert.ToString(args.Value) ?? ApiClientWorkspaceState.FontMedium);
 
     private string RequestTabClass(string key) => RequestTab == key ? "active" : string.Empty;
+
+    private string ResponseTabClass(string key) => ResponseTab == key ? "active" : string.Empty;
+
+    private string SplitEditorClass => ResponseTab == "Full" ? "split-editor full-response" : "split-editor";
+
+    private string RequestPreviewText => string.Join(Environment.NewLine, new[]
+    {
+        $"{Method} {Url}",
+        "",
+        "Headers:",
+        RequestHeaders.Count == 0 ? "  <none>" : string.Join(Environment.NewLine, RequestHeaders.Where(item => item.Enabled).Select(item => $"  {item.Name}: {item.Value}")),
+        "",
+        "Query:",
+        RequestQuery.Count == 0 ? "  <none>" : string.Join(Environment.NewLine, RequestQuery.Where(item => item.Enabled).Select(item => $"  {item.Name}={item.Value}")),
+        "",
+        "Body:",
+        string.IsNullOrWhiteSpace(BodyText) ? "  <empty>" : BodyText
+    });
 
     private string ResponseBodyClass => wrapResponseText ? "response-body wrap-response" : "response-body";
 

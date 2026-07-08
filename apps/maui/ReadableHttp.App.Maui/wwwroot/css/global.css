@@ -34,6 +34,11 @@ body {
     color: #d8dee9;
 }
 
+body.workbench-is-resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+
 button,
 input,
 select,
