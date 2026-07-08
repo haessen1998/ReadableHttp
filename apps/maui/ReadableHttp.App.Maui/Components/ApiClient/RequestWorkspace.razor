@@ -66,64 +66,17 @@
     }
     else if (ActiveRequestOrigin == RequestTabOrigin.Settings)
     {
-        <section class="settings-page">
-            <header>
-                <span>@T("settings")</span>
-                <strong>@T("global")</strong>
-            </header>
-            <section class="settings-section">
-                <h2>@T("preferences")</h2>
-                <label>
-                    <span>@T("theme")</span>
-                    <select value="@SettingsDraft.ThemeMode" @onchange="HandleThemeModeChanged">
-                        <option value="@ApiClientWorkspaceState.ThemeSystem">@T("system")</option>
-                        <option value="@ApiClientWorkspaceState.ThemeLight">@T("light")</option>
-                        <option value="@ApiClientWorkspaceState.ThemeDark">@T("dark")</option>
-                    </select>
-                </label>
-                <label>
-                    <span>@T("language")</span>
-                    <select value="@SettingsDraft.Language" @onchange="HandleLanguageChanged">
-                        <option value="system">@T("system")</option>
-                        <option value="zh-CN">简体中文</option>
-                        <option value="en-US">English</option>
-                    </select>
-                </label>
-                <label>
-                    <span>@T("fontSize")</span>
-                    <select value="@SettingsDraft.FontSize" @onchange="HandleFontSizeChanged">
-                        <option value="@ApiClientWorkspaceState.FontSmall">@T("small")</option>
-                        <option value="@ApiClientWorkspaceState.FontMedium">@T("medium")</option>
-                        <option value="@ApiClientWorkspaceState.FontLarge">@T("large")</option>
-                    </select>
-                </label>
-            </section>
-            <section class="settings-section">
-                <h2>@T("system")</h2>
-                <label>
-                    <span>@T("proxy")</span>
-                    <select value="@SettingsDraft.ProxyMode" @onchange="HandleProxyModeChanged">
-                        <option value="@ApiClientWorkspaceState.ProxyNone">@T("noProxy")</option>
-                        <option value="@ApiClientWorkspaceState.ProxySystem">@T("systemProxy")</option>
-                        <option value="@ApiClientWorkspaceState.ProxyCustom">@T("customProxy")</option>
-                    </select>
-                </label>
-                @if (SettingsDraft.ProxyMode == ApiClientWorkspaceState.ProxyCustom)
-                {
-                    <label><span>Proxy URL</span><input value="@SettingsDraft.CustomProxyUrl" @onchange="HandleCustomProxyUrlChanged" /></label>
-                    <label><span>Username</span><input value="@SettingsDraft.CustomProxyUsername" @onchange="HandleCustomProxyUsernameChanged" /></label>
-                    <label><span>Password</span><input type="password" value="@SettingsDraft.CustomProxyPassword" @onchange="HandleCustomProxyPasswordChanged" /></label>
-                }
-                <label class="settings-check"><input type="checkbox" checked="@SettingsDraft.DevToolsEnabled" @onchange="HandleDevToolsEnabledChanged" /><span>WebView developer tools</span></label>
-            </section>
-            <section class="settings-section">
-                <h2>AI</h2>
-                <p>Local assistant context is enabled. Provider settings can be added here when the AI package is wired to a runtime.</p>
-            </section>
-            <footer class="settings-footer">
-                <button class="save-button" @onclick="OnSaveSettings">@T("save")</button>
-            </footer>
-        </section>
+        <SettingsPage SettingsDraft="@SettingsDraft"
+                      T="@T"
+                      ThemeModeChanged="@ThemeModeChanged"
+                      LanguageChanged="@LanguageChanged"
+                      FontSizeChanged="@FontSizeChanged"
+                      ProxyModeChanged="@ProxyModeChanged"
+                      CustomProxyUrlChanged="@CustomProxyUrlChanged"
+                      CustomProxyUsernameChanged="@CustomProxyUsernameChanged"
+                      CustomProxyPasswordChanged="@CustomProxyPasswordChanged"
+                      DevToolsEnabledChanged="@DevToolsEnabledChanged"
+                      OnSaveSettings="@OnSaveSettings" />
     }
     else if (ActiveRequestOrigin == RequestTabOrigin.About)
     {

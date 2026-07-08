@@ -19,6 +19,12 @@ public sealed record HistoryRecord(
     string? RequestId,
     ReadableExchange Exchange);
 
+public sealed record WorkspaceOptionView(
+    string Path,
+    string Label,
+    bool IsUsable,
+    string Status);
+
 public sealed record EditableNameValueChange(string Kind, int Index, string Field, string? Value);
 
 public sealed record VariableChange(string Scope, int Index, string Field, string? Value);

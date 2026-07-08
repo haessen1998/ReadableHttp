@@ -106,6 +106,9 @@ public sealed class ApiClientWorkspaceState
     public List<string> SpecFiles { get; private set; } = [];
     public List<string> RecentSessions { get; private set; } = ["Scratch Request"];
     public List<string> WorkspaceOptions { get; private set; } = [];
+    public IReadOnlyList<WorkspaceOptionView> WorkspaceOptionViews => WorkspaceOptions
+        .Select(CreateWorkspaceOptionView)
+        .ToList();
     public List<ActivityEntry> ActivityLog { get; private set; } = [new("Ready", "等待加载 workspace 或导入文件")];
     public List<AiChatMessage> AiMessages { get; private set; } = [new("assistant", "我可以根据当前 request、response 或 spec 帮你整理参数、生成测试用例和解释错误。")];
     public List<ReadableAiAction> PendingAiActions { get; private set; } = [];
@@ -279,6 +282,7 @@ public sealed class ApiClientWorkspaceState
         {
             AddWorkspaceOption(settings.WorkspacePath);
         }
+        NormalizeWorkspaceOptions();
 
         var unavailableWorkspaces = WorkspaceOptions
             .Where(path => !IsWorkspaceUsable(path))
@@ -1865,6 +1869,7 @@ public sealed class ApiClientWorkspaceState
 
     public async Task SelectWorkspaceAsync(string path)
     {
+        path = ResolveWorkspaceRootPath(path);
         if (!ValidateWorkspacePath(path, out var message))
         {
             WorkspaceStatus = message;
@@ -1910,8 +1915,9 @@ public sealed class ApiClientWorkspaceState
 
     public void RemoveWorkspaceOption(string path)
     {
-        WorkspaceOptions.RemoveAll(item => string.Equals(item, path, StringComparison.OrdinalIgnoreCase));
-        if (string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        path = ResolveWorkspaceRootPath(path);
+        WorkspaceOptions.RemoveAll(item => string.Equals(ResolveWorkspaceRootPath(item), path, StringComparison.OrdinalIgnoreCase));
+        if (string.Equals(ResolveWorkspaceRootPath(WorkspacePath), path, StringComparison.OrdinalIgnoreCase))
         {
             WorkspacePath = string.Empty;
             Workspace = null;
@@ -1943,6 +1949,7 @@ public sealed class ApiClientWorkspaceState
 
     public Task DeleteWorkspaceFolderAsync(string path)
     {
+        path = ResolveWorkspaceRootPath(path);
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
         {
             RemoveWorkspaceOption(path);
@@ -3768,16 +3775,17 @@ public sealed class ApiClientWorkspaceState
 
     private static bool ValidateWorkspacePath(string path, out string message)
     {
+        path = ResolveWorkspaceRootPath(path);
         if (string.IsNullOrWhiteSpace(path))
         {
             message = "workspace 路径为空";
             return false;
         }
 
-        var workspaceFile = Path.Combine(path, "workspace.json");
-        if (!File.Exists(workspaceFile))
+        var availability = CheckWorkspaceAvailability(path);
+        if (!availability.IsUsable)
         {
-            message = $"无效 workspace：未找到 {workspaceFile}";
+            message = $"无效 workspace：{availability.Status}";
             return false;
         }
 
@@ -4132,22 +4140,197 @@ public sealed class ApiClientWorkspaceState
 
     private void AddWorkspaceOption(string path)
     {
-        if (!string.IsNullOrWhiteSpace(path) && !WorkspaceOptions.Contains(path, StringComparer.OrdinalIgnoreCase))
+        path = ResolveWorkspaceRootPath(path);
+        if (string.IsNullOrWhiteSpace(path))
         {
-            WorkspaceOptions.Insert(0, path);
+            return;
         }
+
+        WorkspaceOptions.RemoveAll(item => string.Equals(ResolveWorkspaceRootPath(item), path, StringComparison.OrdinalIgnoreCase));
+        WorkspaceOptions.Insert(0, path);
+    }
+
+    private void NormalizeWorkspaceOptions()
+    {
+        var normalized = WorkspaceOptions
+            .Select(NormalizeWorkspacePath)
+            .Select(ResolveWorkspaceRootPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        WorkspaceOptions = normalized;
     }
 
     private static bool IsWorkspaceUsable(string path)
     {
-        return !string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, "workspace.json"));
+        return CheckWorkspaceAvailability(path).IsUsable;
+    }
+
+    private static WorkspaceOptionView CreateWorkspaceOptionView(string path)
+    {
+        var normalizedPath = ResolveWorkspaceRootPath(NormalizeWorkspacePath(path));
+        var availability = CheckWorkspaceAvailability(normalizedPath);
+
+        return new WorkspaceOptionView(
+            normalizedPath,
+            WorkspaceDisplayName(normalizedPath),
+            availability.IsUsable,
+            availability.Status);
     }
 
     private static string WorkspaceDisplayName(string path)
     {
+        path = NormalizeWorkspacePath(path);
+        var workspaceFile = GetWorkspaceFile(path);
+        if (File.Exists(workspaceFile))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(workspaceFile));
+                if (document.RootElement.TryGetProperty("name", out var configuredName)
+                    && !string.IsNullOrWhiteSpace(configuredName.GetString()))
+                {
+                    return configuredName.GetString()!;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+            {
+            }
+        }
+
         var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         return string.IsNullOrWhiteSpace(name) ? "workspace" : name;
     }
+
+    private static string NormalizeWorkspacePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        path = path.Trim().Trim('"', '\'');
+        if (Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.IsFile)
+        {
+            path = uri.LocalPath;
+        }
+
+        path = Environment.ExpandEnvironmentVariables(path);
+        if (string.Equals(Path.GetFileName(path), "workspace.json", StringComparison.OrdinalIgnoreCase))
+        {
+            path = Path.GetDirectoryName(path) ?? path;
+        }
+
+        path = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return Path.IsPathFullyQualified(path) ? Path.GetFullPath(path) : path;
+    }
+
+    private static bool TryGetWorkspaceFile(string path, out string workspaceFile)
+    {
+        var availability = CheckWorkspaceAvailability(path);
+        workspaceFile = availability.WorkspaceFile;
+        return availability.IsUsable;
+    }
+
+    private static string GetWorkspaceFile(string path)
+    {
+        path = NormalizeWorkspacePath(path);
+        return string.IsNullOrWhiteSpace(path)
+            ? string.Empty
+            : Path.Combine(path, "workspace.json");
+    }
+
+    private static WorkspaceAvailability CheckWorkspaceAvailability(string path)
+    {
+        var normalizedPath = ResolveWorkspaceRootPath(NormalizeWorkspacePath(path));
+        var workspaceFile = GetWorkspaceFile(normalizedPath);
+        if (string.IsNullOrWhiteSpace(workspaceFile))
+        {
+            return new WorkspaceAvailability(false, string.Empty, "Workspace path is empty");
+        }
+
+        try
+        {
+            if (!Directory.Exists(normalizedPath))
+            {
+                return new WorkspaceAvailability(false, workspaceFile, $"Missing folder {normalizedPath}");
+            }
+
+            if (!File.Exists(workspaceFile))
+            {
+                return new WorkspaceAvailability(false, workspaceFile, $"Missing {workspaceFile}");
+            }
+
+            using var stream = File.OpenRead(workspaceFile);
+            return new WorkspaceAvailability(true, workspaceFile, "Available");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return new WorkspaceAvailability(false, workspaceFile, $"{exception.GetType().Name}: {exception.Message}");
+        }
+    }
+
+    private static string ResolveWorkspaceRootPath(string path)
+    {
+        path = NormalizeWorkspacePath(path);
+        if (string.IsNullOrWhiteSpace(path) || TryWorkspaceFileExists(path))
+        {
+            return path;
+        }
+
+        foreach (var candidate in WorkspacePathCandidates(path))
+        {
+            if (TryWorkspaceFileExists(candidate))
+            {
+                return NormalizeWorkspacePath(candidate);
+            }
+        }
+
+        return path;
+    }
+
+    private static IEnumerable<string> WorkspacePathCandidates(string path)
+    {
+        var trimmedPath = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var relativeTail = Path.IsPathFullyQualified(trimmedPath)
+            ? Path.GetFileName(trimmedPath)
+            : trimmedPath;
+
+        foreach (var root in WorkspaceSearchRoots())
+        {
+            if (!Path.IsPathFullyQualified(trimmedPath))
+            {
+                yield return Path.Combine(root, trimmedPath);
+            }
+
+            if (!string.IsNullOrWhiteSpace(relativeTail))
+            {
+                yield return Path.Combine(root, "samples", "workspaces", relativeTail);
+            }
+        }
+    }
+
+    private static IEnumerable<string> WorkspaceSearchRoots()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var start in new[] { Environment.CurrentDirectory, AppContext.BaseDirectory })
+        {
+            var current = NormalizeWorkspacePath(start);
+            while (!string.IsNullOrWhiteSpace(current) && seen.Add(current))
+            {
+                yield return current;
+                current = Directory.GetParent(current)?.FullName ?? string.Empty;
+            }
+        }
+    }
+
+    private static bool TryWorkspaceFileExists(string path)
+    {
+        var workspaceFile = GetWorkspaceFile(path);
+        return !string.IsNullOrWhiteSpace(workspaceFile) && File.Exists(workspaceFile);
+    }
+
+    private sealed record WorkspaceAvailability(bool IsUsable, string WorkspaceFile, string Status);
 
     private void AddSession(string title)
     {

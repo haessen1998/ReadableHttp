@@ -143,23 +143,22 @@
                     <div class="quick-switch-separator"></div>
                     @foreach (var item in WorkspaceOptions)
                     {
-                        var isActiveWorkspace = string.Equals(WorkspacePath, item, StringComparison.OrdinalIgnoreCase);
-                        var isUsableWorkspace = IsWorkspaceUsable(item);
-                        <div @key="item" class="@WorkspaceQuickRowClass(item)">
-                            <button class="quick-workspace-main" title="@WorkspaceMainTitle(isUsableWorkspace)" @onclick="() => SelectWorkspaceFromQuickSwitch(item)">
-                                <span>@WorkspaceLabel(item)</span>
-                                @if (!isUsableWorkspace)
+                        var isActiveWorkspace = string.Equals(NormalizeWorkspacePath(WorkspacePath), item.Path, StringComparison.OrdinalIgnoreCase);
+                        <div @key="item.Path" class="@WorkspaceQuickRowClass(item, isActiveWorkspace)">
+                            <button class="quick-workspace-main" title="@WorkspaceMainTitle(item)" @onclick="() => SelectWorkspaceFromQuickSwitch(item)">
+                                <span>@item.Label</span>
+                                @if (!item.IsUsable)
                                 {
                                     <small>@T("unavailable")</small>
                                 }
                             </button>
-                            <div class='@RowActionsClass(MenuKey("quick-workspace", item), "quick-workspace-actions")' @onclick:stopPropagation="true">
-                                <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("quick-workspace", item), keepQuickSwitch: true)'>···</button>
+                            <div class='@RowActionsClass(MenuKey("quick-workspace", item.Path), "quick-workspace-actions")' @onclick:stopPropagation="true">
+                                <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("quick-workspace", item.Path), keepQuickSwitch: true)'>···</button>
                                 <div class="more-menu quick-workspace-more">
-                                    @if (isUsableWorkspace)
+                                    @if (item.IsUsable)
                                     {
-                                        <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
-                                        <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
+                                        <button @onclick="() => OnOpenWorkspaceConfig.InvokeAsync(new WorkspaceSelectedEventArgs(item.Path))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
+                                        <button @onclick="() => OnOpenWorkspaceInExplorer.InvokeAsync(new WorkspaceSelectedEventArgs(item.Path))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
                                         @if (isActiveWorkspace)
                                         {
                                             <button @onclick="OnSaveWorkspace"><span class="fluent-icon">@Icon("save")</span><span>@T("save")</span></button>
@@ -171,16 +170,16 @@
                                             }
                                         }
                                     }
-                                    <button @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item))"><span class="fluent-icon">@Icon("remove")</span><span>@T("removeFromList")</span></button>
-                                    @if (isUsableWorkspace)
+                                    <button @onclick="() => OnRemoveWorkspaceOption.InvokeAsync(new WorkspaceSelectedEventArgs(item.Path))"><span class="fluent-icon">@Icon("remove")</span><span>@T("removeFromList")</span></button>
+                                    @if (item.IsUsable)
                                     {
-                                        @if (string.Equals(pendingDeleteWorkspacePath, item, StringComparison.OrdinalIgnoreCase))
+                                        @if (string.Equals(pendingDeleteWorkspacePath, item.Path, StringComparison.OrdinalIgnoreCase))
                                         {
-                                            <button class="danger-menu" @onclick="() => ConfirmDeleteWorkspace(item)"><span class="fluent-icon">@Icon("delete")</span><span>@T("confirmDeleteWorkspace")</span></button>
+                                            <button class="danger-menu" @onclick="() => ConfirmDeleteWorkspace(item.Path)"><span class="fluent-icon">@Icon("delete")</span><span>@T("confirmDeleteWorkspace")</span></button>
                                         }
                                         else
                                         {
-                                            <button class="danger-menu" @onclick="() => pendingDeleteWorkspacePath = item"><span class="fluent-icon">@Icon("delete")</span><span>@T("deleteWorkspaceFolder")</span></button>
+                                            <button class="danger-menu" @onclick="() => pendingDeleteWorkspacePath = item.Path"><span class="fluent-icon">@Icon("delete")</span><span>@T("deleteWorkspaceFolder")</span></button>
                                         }
                                     }
                                 </div>
@@ -213,7 +212,7 @@
     [Parameter] public bool ShowSpecsSection { get; set; }
     [Parameter] public bool ShowRecentSection { get; set; }
     [Parameter] public bool WorkspaceAutoInitialize { get; set; }
-    [Parameter] public IReadOnlyList<string> WorkspaceOptions { get; set; } = [];
+    [Parameter] public IReadOnlyList<WorkspaceOptionView> WorkspaceOptions { get; set; } = [];
     [Parameter] public Func<string, string> T { get; set; } = static key => key;
     [Parameter] public IReadOnlyList<ReadableCollection> Collections { get; set; } = [];
     [Parameter] public ReadableCollection? SelectedCollection { get; set; }
@@ -464,15 +463,15 @@
         pendingDeleteWorkspacePath = null;
     }
 
-    private async Task SelectWorkspaceFromQuickSwitch(string path)
+    private async Task SelectWorkspaceFromQuickSwitch(WorkspaceOptionView workspace)
     {
-        if (!IsWorkspaceUsable(path))
+        if (!workspace.IsUsable)
         {
             return;
         }
 
         quickSwitchOpen = false;
-        await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(path));
+        await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(workspace.Path));
     }
 
     private async Task SelectWorkspaceIfUsable(string path)
@@ -482,7 +481,7 @@
             return;
         }
 
-        await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(path));
+        await OnSelectWorkspace.InvokeAsync(new WorkspaceSelectedEventArgs(NormalizeWorkspacePath(path)));
     }
 
     private void ToggleMore(string key, bool keepQuickSwitch = false)
@@ -570,7 +569,7 @@
     private string WorkspaceClass(string path)
     {
         var classes = "workspace-option";
-        if (string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(NormalizeWorkspacePath(WorkspacePath), NormalizeWorkspacePath(path), StringComparison.OrdinalIgnoreCase))
         {
             classes += " active";
         }
@@ -583,13 +582,13 @@
         return classes;
     }
 
-    private string WorkspaceQuickRowClass(string path)
+    private static string WorkspaceQuickRowClass(WorkspaceOptionView workspace, bool isActiveWorkspace)
     {
-        var classes = string.Equals(WorkspacePath, path, StringComparison.OrdinalIgnoreCase)
+        var classes = isActiveWorkspace
             ? "quick-workspace-row active"
             : "quick-workspace-row";
 
-        if (!IsWorkspaceUsable(path))
+        if (!workspace.IsUsable)
         {
             classes += " unavailable";
         }
@@ -616,12 +615,12 @@
 
     private static bool IsWorkspaceUsable(string path)
     {
-        return !string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, "workspace.json"));
+        return TryGetWorkspaceFile(path, out _);
     }
 
-    private string WorkspaceMainTitle(bool isUsable) => isUsable
+    private string WorkspaceMainTitle(WorkspaceOptionView workspace) => workspace.IsUsable
         ? T("switchWorkspace")
-        : T("workspaceUnavailableHint");
+        : $"{T("workspaceUnavailableHint")}: {workspace.Status}";
 
     private string CollectionClass(ReadableCollection collection)
     {
@@ -644,7 +643,7 @@
 
     private static string WorkspaceLabel(string path)
     {
-        var workspaceFile = Path.Combine(path, "workspace.json");
+        var workspaceFile = GetWorkspaceFile(path);
         if (File.Exists(workspaceFile))
         {
             try
@@ -661,8 +660,44 @@
             }
         }
 
+        path = NormalizeWorkspacePath(path);
         var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         return string.IsNullOrWhiteSpace(name) ? path : name;
+    }
+
+    private static string NormalizeWorkspacePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        path = path.Trim().Trim('"', '\'');
+        if (Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.IsFile)
+        {
+            path = uri.LocalPath;
+        }
+
+        path = Environment.ExpandEnvironmentVariables(path);
+        if (string.Equals(Path.GetFileName(path), "workspace.json", StringComparison.OrdinalIgnoreCase))
+        {
+            path = Path.GetDirectoryName(path) ?? path;
+        }
+
+        path = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return Path.IsPathFullyQualified(path) ? Path.GetFullPath(path) : path;
+    }
+
+    private static string GetWorkspaceFile(string path)
+    {
+        path = NormalizeWorkspacePath(path);
+        return string.IsNullOrWhiteSpace(path) ? string.Empty : Path.Combine(path, "workspace.json");
+    }
+
+    private static bool TryGetWorkspaceFile(string path, out string workspaceFile)
+    {
+        workspaceFile = GetWorkspaceFile(path);
+        return !string.IsNullOrWhiteSpace(workspaceFile) && File.Exists(workspaceFile);
     }
 
     private string CollectionBadge(ReadableCollection collection)

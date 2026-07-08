@@ -8,98 +8,23 @@
 
     @if (Mode == RightPanelMode.History)
     {
-        <section class="panel-content history-panel">
-            <header class="panel-title">
-                <span>History</span>
-                <strong>@HistoryRecords.Count</strong>
-            </header>
-            <div class="history-list">
-                @foreach (var record in HistoryRecords)
-                {
-                    var expanded = ExpandedHistoryRecordId == record.Id;
-                    <article @key="record.Id" class="history-record">
-                        <button type="button" class="history-row" @onclick="() => OnToggleHistoryRecord.InvokeAsync(record.Id)">
-                            <span class="method tiny @record.Method.ToLowerInvariant()">@record.Method</span>
-                            <strong>@record.StatusText</strong>
-                            <small>@record.StartedAt.ToLocalTime().ToString("HH:mm:ss")</small>
-                            <em>@(expanded ? "▴" : "▾")</em>
-                        </button>
-                        <span class="history-url">@record.Url</span>
-                        @if (expanded)
-                        {
-                            <dl class="history-detail">
-                                <div><dt>Request</dt><dd>@record.Title</dd></div>
-                                <div><dt>Trace</dt><dd>@TraceLabel(record)</dd></div>
-                                <div><dt>Response</dt><dd>@ResponseSummary(record)</dd></div>
-                            </dl>
-                            @if (!string.IsNullOrWhiteSpace(record.Exchange.Response?.BodyText))
-                            {
-                                <pre>@record.Exchange.Response.BodyText</pre>
-                            }
-                        }
-                    </article>
-                }
-                @if (HistoryRecords.Count == 0)
-                {
-                    <div class="empty-copy">No request history yet.</div>
-                }
-            </div>
-        </section>
+        <HistoryPanel HistoryRecords="@HistoryRecords"
+                      ExpandedHistoryRecordId="@ExpandedHistoryRecordId"
+                      OnToggleHistoryRecord="@OnToggleHistoryRecord" />
     }
     else
     {
-        <section class="panel-content ai-panel">
-            <header class="panel-title">
-                <span>AI Assistant</span>
-                <strong>MAF</strong>
-            </header>
-            <div class="ai-context">
-                <span>@Method</span>
-                <strong>@Url</strong>
-            </div>
-            <div class="ai-quick-actions">
-                <button type="button" @onclick='() => SendQuickPrompt("读取当前参数并给出优化建议")'>参数</button>
-                <button type="button" @onclick='() => SendQuickPrompt("读取当前响应结果并解释")'>结果</button>
-                <button type="button" @onclick='() => SendQuickPrompt("分析失败原因并给出调整参数建议")'>失败原因</button>
-                <button type="button" @onclick='() => SendQuickPrompt("对比最近历史记录")'>历史对比</button>
-            </div>
-            <div class="chat-log">
-                @foreach (var message in AiMessages)
-                {
-                    <div @key="message" class="chat-message @message.Role">
-                        <strong>@message.Role</strong>
-                        <p>@message.Content</p>
-                    </div>
-                }
-                @foreach (var action in PendingAiActions)
-                {
-                    <div @key="action.Id" class="ai-action-card">
-                        <header>
-                            <strong>@action.Title</strong>
-                            <span>@ActionSafetyLabel(action)</span>
-                        </header>
-                        <p>@action.Summary</p>
-                        @if (action.RequestPatch is not null)
-                        {
-                            <ul>
-                                @foreach (var change in ActionChanges(action.RequestPatch))
-                                {
-                                    <li @key="change">@change</li>
-                                }
-                            </ul>
-                        }
-                        <footer>
-                            <button class="accent-button" @onclick="() => OnApplyAiAction.InvokeAsync(action.Id)">应用</button>
-                            <button type="button" @onclick="() => OnDismissAiAction.InvokeAsync(action.Id)">忽略</button>
-                        </footer>
-                    </div>
-                }
-            </div>
-            <footer class="chat-input">
-                <textarea value="@AiDraft" @onchange="HandleAiDraftChanged" placeholder="@T("askRequest")" />
-                <button class="accent-button" @onclick="OnSendAiMessage">@T("send")</button>
-            </footer>
-        </section>
+        <AiPanel Method="@Method"
+                 Url="@Url"
+                 T="@T"
+                 AiMessages="@AiMessages"
+                 PendingAiActions="@PendingAiActions"
+                 AiDraft="@AiDraft"
+                 AiDraftChanged="@AiDraftChanged"
+                 OnSendAiMessage="@OnSendAiMessage"
+                 OnSendAiQuickPrompt="@OnSendAiQuickPrompt"
+                 OnApplyAiAction="@OnApplyAiAction"
+                 OnDismissAiAction="@OnDismissAiAction" />
     }
 </aside>
 
@@ -122,64 +47,4 @@
     [Parameter] public EventCallback<string> OnToggleHistoryRecord { get; set; }
 
     private string PanelButtonClass(RightPanelMode mode) => Mode == mode ? "active" : string.Empty;
-
-    private static string ActionSafetyLabel(ReadableAiAction action)
-    {
-        return action.Confirmation.RequiresConfirmation
-            ? action.Confirmation.Safety.ToString()
-            : "ReadOnly";
-    }
-
-    private static IReadOnlyList<string> ActionChanges(ReadableAiRequestPatch patch)
-    {
-        var changes = new List<string>();
-        if (!string.IsNullOrWhiteSpace(patch.Method))
-        {
-            changes.Add($"Method -> {patch.Method}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(patch.Url))
-        {
-            changes.Add($"URL -> {patch.Url}");
-        }
-
-        changes.AddRange(patch.QueryChanges.Select(change => $"Query {change.Name} = {change.SuggestedValue}"));
-        changes.AddRange(patch.HeaderChanges.Select(change => $"Header {change.Name} = {change.SuggestedValue}"));
-        changes.AddRange(patch.FormChanges.Select(change => $"Form {change.Name} = {change.SuggestedValue}"));
-        if (patch.BodyText is not null)
-        {
-            changes.Add($"Body -> {patch.BodyType ?? "Raw"}");
-        }
-
-        return changes;
-    }
-
-    private static string TraceLabel(HistoryRecord record)
-    {
-        return string.IsNullOrWhiteSpace(record.RequestId)
-            ? "snapshot only"
-            : $"{record.CollectionId ?? "collection"} / {record.RequestId}";
-    }
-
-    private static string ResponseSummary(HistoryRecord record)
-    {
-        var response = record.Exchange.Response;
-        if (response is null)
-        {
-            return "no response";
-        }
-
-        var bodyLength = response.BodyText?.Length ?? 0;
-        return $"{response.StatusCode} · {bodyLength} chars";
-    }
-
-    private async Task SendQuickPrompt(string prompt)
-    {
-        await OnSendAiQuickPrompt.InvokeAsync(prompt);
-    }
-
-    private async Task HandleAiDraftChanged(ChangeEventArgs args)
-    {
-        await AiDraftChanged.InvokeAsync(Convert.ToString(args.Value) ?? string.Empty);
-    }
 }
