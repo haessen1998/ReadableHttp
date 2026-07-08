@@ -249,6 +249,8 @@ public sealed class ApiClientWorkspaceState
 
     public string SelectedResponseText => GetSelectedResponseText();
 
+    public string ResolvedRequestPreviewText => BuildResolvedRequestPreviewText();
+
     public async Task InitializeAsync()
     {
         if (_initialized)
@@ -927,12 +929,15 @@ public sealed class ApiClientWorkspaceState
                 "confirmDeleteWorkspace" => "Confirm delete folder",
                 "collections" => "Collections",
                 "newCollection" => "New collection",
+                "newSubCollection" => "New subcollection",
                 "reloadCollections" => "Reload collections",
                 "collapseAll" => "Collapse all",
                 "newRequest" => "New request",
                 "duplicate" => "Duplicate",
                 "copy" => "Copy",
                 "wrapResponse" => "Wrap response",
+                "expandResponse" => "Expand response pane",
+                "restoreSplit" => "Restore split view",
                 "delete" => "Delete",
                 "noMatchingRequests" => "No matching requests",
                 "open" => "Open",
@@ -1047,12 +1052,15 @@ public sealed class ApiClientWorkspaceState
             "confirmDeleteWorkspace" => "确认删除文件夹",
             "collections" => "集合",
             "newCollection" => "新增集合",
+            "newSubCollection" => "新增子集合",
             "reloadCollections" => "重新加载集合",
             "collapseAll" => "全部收起",
             "newRequest" => "新增请求",
             "duplicate" => "复制",
             "copy" => "复制",
             "wrapResponse" => "响应自动换行",
+            "expandResponse" => "展开响应区域",
+            "restoreSplit" => "恢复左右分栏",
             "delete" => "删除",
             "noMatchingRequests" => "没有匹配的请求",
             "open" => "打开",
@@ -1678,6 +1686,40 @@ public sealed class ApiClientWorkspaceState
     }
 
     public async Task NewRequestInCollectionAsync(CollectionEventArgs args) => await NewRequestInCollectionAsync(args.Collection);
+
+    public async Task NewSubCollectionAsync(ReadableCollection parent)
+    {
+        if (Workspace is null || !ValidateWorkspacePath(WorkspacePath, out _))
+        {
+            WorkspaceStatus = "请先新建或加载 workspace";
+            AddActivity("Workspace", WorkspaceStatus);
+            NotifyChanged();
+            return;
+        }
+
+        var childCount = parent.Children.Count + 1;
+        var parentDirectory = CollectionDirectoryKey(parent);
+        var child = new ReadableCollection
+        {
+            Name = $"{parent.Name} Subcollection {childCount}",
+            SourceType = ReadableCollectionSourceType.Local,
+            RequestDirectory = string.IsNullOrWhiteSpace(parentDirectory)
+                ? $"collections/subcollection-{childCount}"
+                : $"{parentDirectory.TrimEnd('/')}/subcollection-{childCount}"
+        };
+        parent.Children.Add(child);
+        Workspace.Collections = Collections;
+        SelectedCollection = child;
+        SelectedRequest = null;
+        DocumentTitle = child.Name;
+        ActiveSource = child.SourceType.ToString();
+        OpenCollectionConfigTab(child);
+        AddActivity("Collection", $"已在 {parent.Name} 中新增子集合 {child.Name}");
+        await SaveWorkspaceAsync();
+        NotifyChanged();
+    }
+
+    public async Task NewSubCollectionAsync(CollectionEventArgs args) => await NewSubCollectionAsync(args.Collection);
 
     public async Task SelectSpecAsync(string path)
     {
@@ -4349,6 +4391,76 @@ public sealed class ApiClientWorkspaceState
         {
             ActivityLog.RemoveAt(ActivityLog.Count - 1);
         }
+    }
+
+    private string BuildResolvedRequestPreviewText()
+    {
+        var context = CreateExecutionContext();
+        var resolvedUrl = ResolveTemplateValue(Url, context.Variables);
+        var enabledHeaders = RequestHeaders
+            .Where(item => item.Enabled)
+            .Select(item => $"  {ResolveTemplateValue(item.Name, context.Variables)}: {ResolveTemplateValue(item.Value, context.Variables)}")
+            .ToList();
+        var enabledQuery = RequestQuery
+            .Where(item => item.Enabled)
+            .Select(item => $"  {ResolveTemplateValue(item.Name, context.Variables)}={ResolveTemplateValue(item.Value, context.Variables)}")
+            .ToList();
+
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"{Method} {resolvedUrl}",
+            "",
+            "Headers:",
+            enabledHeaders.Count == 0 ? "  <none>" : string.Join(Environment.NewLine, enabledHeaders),
+            "",
+            "Query:",
+            enabledQuery.Count == 0 ? "  <none>" : string.Join(Environment.NewLine, enabledQuery),
+            "",
+            "Body:",
+            BuildResolvedBodyPreviewLines(context.Variables)
+        });
+    }
+
+    private string BuildResolvedBodyPreviewLines(IReadOnlyDictionary<string, ReadableVariable> variables)
+    {
+        if (BodyType == ReadableBodyType.FormUrlEncoded.ToString()
+            || BodyType == ReadableBodyType.MultipartFormData.ToString())
+        {
+            var formItems = RequestForm
+                .Where(item => item.Enabled)
+                .Select(item => $"  {ResolveTemplateValue(item.Name, variables)}={ResolveTemplateValue(item.Value, variables)}")
+                .ToList();
+            return formItems.Count == 0 ? "  <empty>" : string.Join(Environment.NewLine, formItems);
+        }
+
+        if (BodyType == ReadableBodyType.BinaryFile.ToString())
+        {
+            return "  <binary file>";
+        }
+
+        if (BodyType == ReadableBodyType.None.ToString())
+        {
+            return "  <empty>";
+        }
+
+        return string.IsNullOrWhiteSpace(BodyText)
+            ? "  <empty>"
+            : ResolveTemplateValue(BodyText, variables);
+    }
+
+    private static string ResolveTemplateValue(string? value, IReadOnlyDictionary<string, ReadableVariable> variables)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        foreach (var (name, variable) in variables)
+        {
+            value = value.Replace("{{" + name + "}}", variable.ToTemplateValue() ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return value;
     }
 
     private List<string> GetResponseNodeKeys()

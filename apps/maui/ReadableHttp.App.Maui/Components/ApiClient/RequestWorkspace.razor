@@ -249,19 +249,19 @@
     {
         <section class="request-canvas">
             <div class="@SplitEditorClass">
-                @if (ResponseTab != "Full")
+                @if (!expandResponsePane)
                 {
                 <section class="editor-pane request-pane">
                     <nav class="editor-tabs" aria-label="Request editor tabs">
-                        <button class="@RequestTabClass("Info")" @onclick='() => OnSetRequestTab.InvokeAsync("Info")'>@T("requestInfo")</button>
-                        <button class="@RequestTabClass("Params")" @onclick='() => OnSetRequestTab.InvokeAsync("Params")'>Params <span>@RequestQuery.Count</span></button>
-                        <button class="@RequestTabClass("Body")" @onclick='() => OnSetRequestTab.InvokeAsync("Body")'>Body</button>
-                        <button class="@RequestTabClass("Headers")" @onclick='() => OnSetRequestTab.InvokeAsync("Headers")'>Headers <span>@RequestHeaders.Count</span></button>
-                        <button class="@RequestTabClass("Auth")" @onclick='() => OnSetRequestTab.InvokeAsync("Auth")'>Auth</button>
-                        <button class="@RequestTabClass("Vars")" @onclick='() => OnSetRequestTab.InvokeAsync("Vars")'>Vars</button>
-                        <button class="@RequestTabClass("Script")" @onclick='() => OnSetRequestTab.InvokeAsync("Script")'>Script</button>
-                        <button class="@RequestTabClass("Assert")" @onclick='() => OnSetRequestTab.InvokeAsync("Assert")'>Assert</button>
-                        <button class="tab-more" type="button" title="@T("more")">@Icon("chevron")</button>
+                        <button class="@RequestTabClass("Info")" title="@T("requestInfo")" @onclick='() => OnSetRequestTab.InvokeAsync("Info")'>@T("requestInfo")</button>
+                        <button class="@RequestTabClass("Params")" title="Params" @onclick='() => OnSetRequestTab.InvokeAsync("Params")'>Params <span>@RequestQuery.Count</span></button>
+                        <button class="@RequestTabClass("Body")" title="Body" @onclick='() => OnSetRequestTab.InvokeAsync("Body")'>Body</button>
+                        <button class="@RequestTabClass("Headers")" title="Headers" @onclick='() => OnSetRequestTab.InvokeAsync("Headers")'>Headers <span>@RequestHeaders.Count</span></button>
+                        <button class="@RequestTabClass("Auth")" title="Auth" @onclick='() => OnSetRequestTab.InvokeAsync("Auth")'>Auth</button>
+                        <button class="@RequestTabClass("Vars")" title="Vars" @onclick='() => OnSetRequestTab.InvokeAsync("Vars")'>Vars</button>
+                        <button class="@RequestTabClass("Script")" title="Script" @onclick='() => OnSetRequestTab.InvokeAsync("Script")'>Script</button>
+                        <button class="@RequestTabClass("Assert")" title="Assert" @onclick='() => OnSetRequestTab.InvokeAsync("Assert")'>Assert</button>
+                        <button class="request-tab-more" type="button" title="@T("more")">@Icon("chevron")</button>
                         <span class="tab-spacer"></span>
                         @if (RequestTab == "Body")
                         {
@@ -422,6 +422,7 @@
                         <div class="response-meta-line">
                             <span class="@StatusClass">@StatusText</span>
                             <span>@(ResponseText.Length == 0 ? "0 B" : $"{ResponseText.Length} B")</span>
+                            <button type="button" class="@ExpandResponseButtonClass" title="@ExpandResponseTitle" @onclick="ToggleExpandResponsePane">@ExpandResponseIcon</button>
                             <button type="button" class="@ResponseWrapButtonClass" title="@T("wrapResponse")" @onclick="ToggleResponseWrap">↵</button>
                             <button type="button" class="pane-tool-button copy-response-button" title="@T("copy")" @onclick="OnCopySelectedResponse"><span class="fluent-icon">@Icon("copy")</span></button>
                         </div>
@@ -460,6 +461,19 @@
                             <pre>@RequestPreviewText</pre>
                         </div>
                     }
+                    else if (ResponseTab == "Full")
+                    {
+                        <div class="full-exchange-view">
+                            <section class="full-request-view">
+                                <header>Request</header>
+                                <pre>@RequestPreviewText</pre>
+                            </section>
+                            <section class="full-response-view">
+                                <header>Response</header>
+                                @RenderResponseBody()
+                            </section>
+                        </div>
+                    }
                     else if (string.IsNullOrWhiteSpace(ResponseText))
                     {
                         <div class="response-empty">
@@ -469,19 +483,7 @@
                     }
                     else
                     {
-                        <div class="@ResponseBodyClass">
-                            @if (ResponseNodeKeys.Count > 0)
-                            {
-                                <div class="json-node-bar">
-                                    <button class="@ResponseNodeClass("root")" @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>response</button>
-                                    @foreach (var node in ResponseNodeKeys)
-                                    {
-                                        <button @key="node" class="@ResponseNodeClass(AbsoluteResponseNodePath(node))" @onclick="() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs(AbsoluteResponseNodePath(node)))">@node</button>
-                                    }
-                                </div>
-                            }
-                            <pre>@SelectedResponseText</pre>
-                        </div>
+                        @RenderResponseBody()
                     }
                 </section>
             </div>
@@ -492,6 +494,7 @@
 @code {
     private string? contextMenuTabId;
     private bool wrapResponseText;
+    private bool expandResponsePane;
 
     [Parameter] public string Method { get; set; } = "GET";
     [Parameter] public EventCallback<string> MethodChanged { get; set; }
@@ -576,6 +579,7 @@
     [Parameter] public IReadOnlyList<PipelinePhase> PipelinePhases { get; set; } = [];
     [Parameter] public IReadOnlyList<string> ResponseNodeKeys { get; set; } = [];
     [Parameter] public string SelectedResponseText { get; set; } = string.Empty;
+    [Parameter] public string RequestPreviewText { get; set; } = string.Empty;
     [Parameter] public IReadOnlyList<RequestWorkspaceTab> RequestTabs { get; set; } = [];
     [Parameter] public string? ActiveRequestTabId { get; set; }
     [Parameter] public string? PendingCloseTabId { get; set; }
@@ -616,6 +620,30 @@
     [Parameter] public EventCallback<string> OnSetResponseTab { get; set; }
     [Parameter] public EventCallback<ResponseNodeSelectedEventArgs> OnSelectResponseNode { get; set; }
     [Parameter] public EventCallback OnCopySelectedResponse { get; set; }
+
+    private RenderFragment RenderResponseBody() => @<div class="@ResponseBodyClass">
+        @if (ResponseNodeKeys.Count > 0)
+        {
+            <div class="json-node-bar">
+                <button class="@ResponseNodeClass("root")" @onclick='() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs("root"))'>response</button>
+                @foreach (var node in ResponseNodeKeys)
+                {
+                    <button @key="node" class="@ResponseNodeClass(AbsoluteResponseNodePath(node))" @onclick="() => OnSelectResponseNode.InvokeAsync(new ResponseNodeSelectedEventArgs(AbsoluteResponseNodePath(node)))">@node</button>
+                }
+            </div>
+        }
+        @if (string.IsNullOrWhiteSpace(ResponseText))
+        {
+            <div class="response-empty inline-empty">
+                <strong>@StatusText</strong>
+                <span>@Method @Url</span>
+            </div>
+        }
+        else
+        {
+            <pre>@SelectedResponseText</pre>
+        }
+    </div>;
 
     private RenderFragment RenderNameValueEditor(string kind, IReadOnlyList<ReadableNameValue> items) => @<div class="name-value-editor">
         <div class="name-value-actions">
@@ -812,6 +840,11 @@
         wrapResponseText = !wrapResponseText;
     }
 
+    private void ToggleExpandResponsePane()
+    {
+        expandResponsePane = !expandResponsePane;
+    }
+
     private async Task SaveAndCloseTab(string tabId)
     {
         await OnSaveOpenTab.InvokeAsync(tabId);
@@ -911,25 +944,17 @@
 
     private string ResponseTabClass(string key) => ResponseTab == key ? "active" : string.Empty;
 
-    private string SplitEditorClass => ResponseTab == "Full" ? "split-editor full-response" : "split-editor";
-
-    private string RequestPreviewText => string.Join(Environment.NewLine, new[]
-    {
-        $"{Method} {Url}",
-        "",
-        "Headers:",
-        RequestHeaders.Count == 0 ? "  <none>" : string.Join(Environment.NewLine, RequestHeaders.Where(item => item.Enabled).Select(item => $"  {item.Name}: {item.Value}")),
-        "",
-        "Query:",
-        RequestQuery.Count == 0 ? "  <none>" : string.Join(Environment.NewLine, RequestQuery.Where(item => item.Enabled).Select(item => $"  {item.Name}={item.Value}")),
-        "",
-        "Body:",
-        string.IsNullOrWhiteSpace(BodyText) ? "  <empty>" : BodyText
-    });
+    private string SplitEditorClass => expandResponsePane ? "split-editor expanded-response" : "split-editor";
 
     private string ResponseBodyClass => wrapResponseText ? "response-body wrap-response" : "response-body";
 
     private string ResponseWrapButtonClass => wrapResponseText ? "pane-tool-button wrap-response-button active" : "pane-tool-button wrap-response-button";
+
+    private string ExpandResponseButtonClass => expandResponsePane ? "pane-tool-button expand-response-button active" : "pane-tool-button expand-response-button";
+
+    private string ExpandResponseIcon => expandResponsePane ? "⇥" : "⇤";
+
+    private string ExpandResponseTitle => expandResponsePane ? T("restoreSplit") : T("expandResponse");
 
     private string OpenTabClass(RequestWorkspaceTab tab)
     {

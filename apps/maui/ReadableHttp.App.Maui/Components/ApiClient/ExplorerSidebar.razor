@@ -252,6 +252,7 @@
     [Parameter] public EventCallback<CollectionEventArgs> OnSelectCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnOpenCollectionConfig { get; set; }
     [Parameter] public EventCallback<RequestEventArgs> OnSelectRequest { get; set; }
+    [Parameter] public EventCallback<CollectionEventArgs> OnNewSubCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnNewRequestInCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnDuplicateCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnDeleteCollectionItem { get; set; }
@@ -394,8 +395,11 @@
             </button>
             <div class='@RowActionsClass(MenuKey("collection", collection.Id))' @onclick:stopPropagation="true">
                 <button title="@T("newRequest")" @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))">＋</button>
+                <button title="@T("newSubCollection")" @onclick="() => AddSubCollection(collection)"><span class="fluent-icon">@Icon("folderAdd")</span></button>
                 <button title="@T("more")" @onclick='() => ToggleMore(MenuKey("collection", collection.Id))'>···</button>
                 <div class="more-menu">
+                    <button @onclick="() => AddSubCollection(collection)"><span class="fluent-icon">@Icon("folderAdd")</span><span>@T("newSubCollection")</span></button>
+                    <button @onclick="() => OnNewRequestInCollection.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("add")</span><span>@T("newRequest")</span></button>
                     <button @onclick="() => OnOpenCollectionConfig.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
                     <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
                     @RenderSortMenu($"collection:{collection.Id}")
@@ -549,6 +553,13 @@
         {
             expandedCollectionIds.Remove(collection.Id);
         }
+    }
+
+    private async Task AddSubCollection(ReadableCollection collection)
+    {
+        expandedCollectionIds.Add(collection.Id);
+        openMenuKey = null;
+        await OnNewSubCollection.InvokeAsync(new CollectionEventArgs(collection));
     }
 
     private bool IsCollectionExpanded(ReadableCollection collection)
@@ -828,6 +839,7 @@
             "delete" => "\uE74D",
             "open" => "\uE8A7",
             "folder" => "\uE8B7",
+            "folderAdd" => "\uE8F4",
             "settings" => "\uE713",
             "save" => "\uE74E",
             "remove" => "\uE738",
