@@ -660,23 +660,31 @@ public sealed class ApiClientWorkspaceState
             return;
         }
 
+        var oldRelativeDirectory = CollectionDirectoryKey(SelectedCollection);
         var oldDirectory = GetCollectionDirectory(SelectedCollection);
         var name = string.IsNullOrWhiteSpace(value) ? "Collection" : value.Trim();
         SelectedCollection.Name = name;
         if (ShouldRenameCollectionDirectory(SelectedCollection))
         {
-            var newRelativeDirectory = $"collections/{ToFileName(name)}";
+            var parentDirectory = ParentDirectoryKey(oldRelativeDirectory);
+            var newRelativeDirectory = UniqueCollectionDirectory(
+                string.IsNullOrWhiteSpace(parentDirectory)
+                    ? $"collections/{ToFileName(name)}"
+                    : $"{parentDirectory.TrimEnd('/')}/{ToFileName(name)}",
+                SelectedCollection);
             var newDirectory = Path.Combine(WorkspacePath, newRelativeDirectory);
             if (!string.Equals(NormalizePath(oldDirectory), NormalizePath(newDirectory), StringComparison.OrdinalIgnoreCase))
             {
                 if (Directory.Exists(oldDirectory) && !Directory.Exists(newDirectory))
                 {
+                    Directory.CreateDirectory(Path.GetDirectoryName(newDirectory) ?? newDirectory);
                     Directory.Move(oldDirectory, newDirectory);
                 }
 
                 if (!Directory.Exists(oldDirectory) || Directory.Exists(newDirectory))
                 {
                     SelectedCollection.RequestDirectory = newRelativeDirectory;
+                    UpdateDescendantCollectionDirectories(SelectedCollection, oldRelativeDirectory, newRelativeDirectory);
                     if (SelectedCollection.Id.StartsWith(DiscoveredCollectionIdPrefix, StringComparison.OrdinalIgnoreCase))
                     {
                         SelectedCollection.Id = $"{DiscoveredCollectionIdPrefix}{newRelativeDirectory}";
@@ -943,6 +951,8 @@ public sealed class ApiClientWorkspaceState
                 "open" => "Open",
                 "openDefault" => "Open default",
                 "moveTo" => "Move to",
+                "moveHere" => "Move here",
+                "moveToTop" => "Move to top level",
                 "specifications" => "Specs",
                 "newSpecification" => "New spec",
                 "localFile" => "Local file",
@@ -1066,6 +1076,8 @@ public sealed class ApiClientWorkspaceState
             "open" => "打开",
             "openDefault" => "默认打开",
             "moveTo" => "移动到",
+            "moveHere" => "移动到此集合",
+            "moveToTop" => "移动到顶层",
             "specifications" => "文档",
             "newSpecification" => "新增文档",
             "localFile" => "本地文件",
@@ -2127,6 +2139,54 @@ public sealed class ApiClientWorkspaceState
 
     public async Task DuplicateCollectionAsync(CollectionEventArgs args) => await DuplicateCollectionAsync(args.Collection);
 
+    public async Task MoveCollectionAsync(CollectionMoveEventArgs args)
+    {
+        if (Workspace is null || IsRootCollection(args.Collection))
+        {
+            return;
+        }
+
+        if (args.TargetParent is not null
+            && (string.Equals(args.Collection.Id, args.TargetParent.Id, StringComparison.OrdinalIgnoreCase)
+                || IsDescendantCollection(args.Collection, args.TargetParent)))
+        {
+            AddActivity("Collection", "不能移动到自身或子集合中");
+            NotifyChanged();
+            return;
+        }
+
+        var oldRelativeDirectory = CollectionDirectoryKey(args.Collection);
+        var oldDirectory = GetCollectionDirectory(args.Collection);
+        var newRelativeDirectory = CollectionMoveDirectory(args.Collection, args.TargetParent);
+        var moved = RemoveCollectionFromTree(args.Collection);
+        if (!moved)
+        {
+            return;
+        }
+
+        args.Collection.RequestDirectory = newRelativeDirectory;
+        UpdateDescendantCollectionDirectories(args.Collection, oldRelativeDirectory, newRelativeDirectory);
+        if (args.TargetParent is null)
+        {
+            Collections.Add(args.Collection);
+        }
+        else
+        {
+            args.TargetParent.Children.Add(args.Collection);
+        }
+
+        MoveCollectionDirectoryIfPossible(oldDirectory, GetCollectionDirectory(args.Collection));
+        Workspace.Collections = Collections;
+        await _workspaceStore.SaveWorkspaceAsync(WorkspacePath, Workspace);
+        SelectedCollection = args.Collection;
+        SelectedRequest = null;
+        OpenCollectionConfigTab(args.Collection);
+        AddActivity("Collection", args.TargetParent is null
+            ? $"已移动 {args.Collection.Name} 到顶层"
+            : $"已移动 {args.Collection.Name} 到 {args.TargetParent.Name}");
+        NotifyChanged();
+    }
+
     public async Task DeleteCollectionAsync(ReadableCollection collection)
     {
         if (Workspace is null)
@@ -2939,6 +2999,82 @@ public sealed class ApiClientWorkspaceState
         }
 
         return false;
+    }
+
+    private static bool IsDescendantCollection(ReadableCollection ancestor, ReadableCollection candidate)
+    {
+        return ancestor.Children.Any(child =>
+            string.Equals(child.Id, candidate.Id, StringComparison.OrdinalIgnoreCase)
+            || IsDescendantCollection(child, candidate));
+    }
+
+    private string CollectionMoveDirectory(ReadableCollection collection, ReadableCollection? targetParent)
+    {
+        var baseName = ToFileName(collection.Name);
+        if (targetParent is null)
+        {
+            return UniqueCollectionDirectory($"collections/{baseName}", collection);
+        }
+
+        var parentDirectory = CollectionDirectoryKey(targetParent);
+        var prefix = string.IsNullOrWhiteSpace(parentDirectory) ? "collections" : parentDirectory;
+        return UniqueCollectionDirectory($"{prefix.TrimEnd('/')}/{baseName}", collection);
+    }
+
+    private string UniqueCollectionDirectory(string baseDirectory, ReadableCollection movingCollection)
+    {
+        baseDirectory = baseDirectory.Replace('\\', '/').Trim('/');
+        var existingDirectories = EnumerateCollections(Collections)
+            .Where(collection => !ReferenceEquals(collection, movingCollection)
+                && !IsDescendantCollection(movingCollection, collection))
+            .Select(CollectionDirectoryKey)
+            .Where(directory => !string.IsNullOrWhiteSpace(directory))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var directory = baseDirectory;
+        var index = 2;
+        while (existingDirectories.Contains(directory))
+        {
+            directory = $"{baseDirectory}-{index}";
+            index++;
+        }
+
+        return directory;
+    }
+
+    private static void UpdateDescendantCollectionDirectories(
+        ReadableCollection collection,
+        string oldRootDirectory,
+        string newRootDirectory)
+    {
+        foreach (var child in collection.Children)
+        {
+            var oldChildDirectory = CollectionDirectoryKey(child);
+            if (!string.IsNullOrWhiteSpace(oldRootDirectory)
+                && oldChildDirectory.StartsWith(oldRootDirectory.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                child.RequestDirectory = $"{newRootDirectory.TrimEnd('/')}/{oldChildDirectory[(oldRootDirectory.TrimEnd('/').Length + 1)..]}";
+            }
+            else
+            {
+                child.RequestDirectory = $"{newRootDirectory.TrimEnd('/')}/{ToFileName(child.Name)}";
+            }
+
+            UpdateDescendantCollectionDirectories(child, oldChildDirectory, child.RequestDirectory);
+        }
+    }
+
+    private static void MoveCollectionDirectoryIfPossible(string oldDirectory, string newDirectory)
+    {
+        if (string.Equals(NormalizePath(oldDirectory), NormalizePath(newDirectory), StringComparison.OrdinalIgnoreCase)
+            || !Directory.Exists(oldDirectory)
+            || Directory.Exists(newDirectory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(newDirectory) ?? newDirectory);
+        Directory.Move(oldDirectory, newDirectory);
     }
 
     private ReadableCollection? FindParentCollection(ReadableCollection collection)

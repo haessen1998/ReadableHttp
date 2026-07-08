@@ -254,6 +254,7 @@
     [Parameter] public EventCallback<RequestEventArgs> OnSelectRequest { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnNewSubCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnNewRequestInCollection { get; set; }
+    [Parameter] public EventCallback<CollectionMoveEventArgs> OnMoveCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnDuplicateCollection { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnDeleteCollectionItem { get; set; }
     [Parameter] public EventCallback<CollectionEventArgs> OnOpenCollectionInExplorer { get; set; }
@@ -328,12 +329,66 @@
         return SortRequests(collection, FilteredRequests(collection), sort).ToList();
     }
 
-    private IReadOnlyList<ReadableCollection> MoveTargetCollections(ReadableCollection source)
+    private IReadOnlyList<ReadableCollection> MoveTargetRoots(ReadableCollection source)
     {
-        return EnumerateCollections(Collections)
-            .Where(collection => !IsRootCollection(collection)
-                && !string.Equals(collection.Id, source.Id, StringComparison.OrdinalIgnoreCase))
+        return SortCollections(RootLevelCollections
+            .Where(collection => CollectionHasMoveTarget(collection, source))
+            .ToList())
             .ToList();
+    }
+
+    private IReadOnlyList<ReadableCollection> MoveTargetChildren(ReadableCollection collection, ReadableCollection source)
+    {
+        return SortCollections(collection.Children
+            .Where(child => CollectionHasMoveTarget(child, source))
+            .ToList())
+            .ToList();
+    }
+
+    private IReadOnlyList<ReadableCollection> CollectionMoveTargetRoots(ReadableCollection source)
+    {
+        return SortCollections(RootLevelCollections
+            .Where(collection => CollectionHasCollectionMoveTarget(collection, source))
+            .ToList())
+            .ToList();
+    }
+
+    private IReadOnlyList<ReadableCollection> CollectionMoveTargetChildren(ReadableCollection collection, ReadableCollection source)
+    {
+        return SortCollections(collection.Children
+            .Where(child => CollectionHasCollectionMoveTarget(child, source))
+            .ToList())
+            .ToList();
+    }
+
+    private static bool CollectionHasMoveTarget(ReadableCollection collection, ReadableCollection source)
+    {
+        return !IsSameCollection(collection, source)
+            || collection.Children.Any(child => CollectionHasMoveTarget(child, source));
+    }
+
+    private static bool CollectionHasCollectionMoveTarget(ReadableCollection collection, ReadableCollection source)
+    {
+        return IsValidCollectionMoveTarget(source, collection)
+            || collection.Children.Any(child => CollectionHasCollectionMoveTarget(child, source));
+    }
+
+    private static bool IsValidCollectionMoveTarget(ReadableCollection source, ReadableCollection target)
+    {
+        return !IsSameCollection(source, target)
+            && !IsDescendantCollection(source, target);
+    }
+
+    private static bool IsSameCollection(ReadableCollection left, ReadableCollection right)
+    {
+        return string.Equals(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDescendantCollection(ReadableCollection ancestor, ReadableCollection candidate)
+    {
+        return ancestor.Children.Any(child =>
+            IsSameCollection(child, candidate)
+            || IsDescendantCollection(child, candidate));
     }
 
     private IEnumerable<ReadableCollection> SortCollections(IReadOnlyList<ReadableCollection> collections)
@@ -403,6 +458,26 @@
                     <button @onclick="() => OnOpenCollectionConfig.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("settings")</span><span>@T("configure")</span></button>
                     <button @onclick="() => OnOpenCollectionInExplorer.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("folder")</span><span>@T("openInExplorer")</span></button>
                     @RenderSortMenu($"collection:{collection.Id}")
+                    @if (CollectionMoveTargetRoots(collection).Count > 0 || !IsTopLevelCollection(collection))
+                    {
+                        <div class="menu-submenu">
+                            <button class="submenu-trigger" type="button"><span class="fluent-icon">@Icon("move")</span><span>@T("moveTo")</span></button>
+                            <div class="submenu-panel">
+                                @if (!IsTopLevelCollection(collection))
+                                {
+                                    <button @onclick="() => MoveCollection(collection, null)"><span class="fluent-icon">@Icon("move")</span><span>@T("moveToTop")</span></button>
+                                    @if (CollectionMoveTargetRoots(collection).Count > 0)
+                                    {
+                                        <div class="menu-separator"></div>
+                                    }
+                                }
+                                @foreach (var targetCollection in CollectionMoveTargetRoots(collection))
+                                {
+                                    @RenderCollectionMoveTarget(collection, targetCollection)
+                                }
+                            </div>
+                        </div>
+                    }
                     <button @onclick="() => OnDuplicateCollection.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
                     <button class="danger-menu" @onclick="() => OnDeleteCollectionItem.InvokeAsync(new CollectionEventArgs(collection))"><span class="fluent-icon">@Icon("delete")</span><span>@T("delete")</span></button>
                 </div>
@@ -434,14 +509,14 @@
                         <button @onclick="() => OnSelectRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("open")</span><span>@T("open")</span></button>
                         <button @onclick="() => OnDuplicateRequest.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("copy")</span><span>@T("duplicate")</span></button>
                         <button @onclick="() => OnOpenRequestDefault.InvokeAsync(new RequestEventArgs(collection, request))"><span class="fluent-icon">@Icon("document")</span><span>@T("openDefault")</span></button>
-                        @if (MoveTargetCollections(collection).Count > 0)
+                        @if (MoveTargetRoots(collection).Count > 0)
                         {
                             <div class="menu-submenu">
                                 <button class="submenu-trigger" type="button">@T("moveTo")</button>
                                 <div class="submenu-panel">
-                                    @foreach (var targetCollection in MoveTargetCollections(collection))
+                                    @foreach (var targetCollection in MoveTargetRoots(collection))
                                     {
-                                        <button @key="targetCollection.Id" @onclick="() => OnMoveRequest.InvokeAsync(new RequestMoveEventArgs(collection, request, targetCollection))">@targetCollection.Name</button>
+                                        @RenderMoveTarget(collection, request, targetCollection)
                                     }
                                 </div>
                             </div>
@@ -450,6 +525,58 @@
                     </div>
                 </div>
             </div>
+        }
+    </div>;
+
+    private RenderFragment RenderMoveTarget(ReadableCollection source, ReadableRequest request, ReadableCollection target) => @<div @key="target.Id" class="menu-submenu move-target-submenu">
+        @{
+            var children = MoveTargetChildren(target, source);
+            var canMoveHere = !IsSameCollection(target, source);
+        }
+        @if (children.Count > 0)
+        {
+            <button class="submenu-trigger" type="button">@target.Name</button>
+            <div class="submenu-panel">
+                @if (canMoveHere)
+                {
+                    <button @onclick="() => OnMoveRequest.InvokeAsync(new RequestMoveEventArgs(source, request, target))"><span class="fluent-icon">@Icon("move")</span><span>@T("moveHere")</span></button>
+                    <div class="menu-separator"></div>
+                }
+                @foreach (var child in children)
+                {
+                    @RenderMoveTarget(source, request, child)
+                }
+            </div>
+        }
+        else if (canMoveHere)
+        {
+            <button @onclick="() => OnMoveRequest.InvokeAsync(new RequestMoveEventArgs(source, request, target))">@target.Name</button>
+        }
+    </div>;
+
+    private RenderFragment RenderCollectionMoveTarget(ReadableCollection source, ReadableCollection target) => @<div @key="target.Id" class="menu-submenu move-target-submenu">
+        @{
+            var children = CollectionMoveTargetChildren(target, source);
+            var canMoveHere = IsValidCollectionMoveTarget(source, target);
+        }
+        @if (children.Count > 0)
+        {
+            <button class="submenu-trigger" type="button">@target.Name</button>
+            <div class="submenu-panel">
+                @if (canMoveHere)
+                {
+                    <button @onclick="() => MoveCollection(source, target)"><span class="fluent-icon">@Icon("move")</span><span>@T("moveHere")</span></button>
+                    <div class="menu-separator"></div>
+                }
+                @foreach (var child in children)
+                {
+                    @RenderCollectionMoveTarget(source, child)
+                }
+            </div>
+        }
+        else if (canMoveHere)
+        {
+            <button @onclick="() => MoveCollection(source, target)">@target.Name</button>
         }
     </div>;
 
@@ -560,6 +687,22 @@
         expandedCollectionIds.Add(collection.Id);
         openMenuKey = null;
         await OnNewSubCollection.InvokeAsync(new CollectionEventArgs(collection));
+    }
+
+    private async Task MoveCollection(ReadableCollection collection, ReadableCollection? targetParent)
+    {
+        if (targetParent is not null)
+        {
+            expandedCollectionIds.Add(targetParent.Id);
+        }
+
+        openMenuKey = null;
+        await OnMoveCollection.InvokeAsync(new CollectionMoveEventArgs(collection, targetParent));
+    }
+
+    private bool IsTopLevelCollection(ReadableCollection collection)
+    {
+        return RootLevelCollections.Any(item => IsSameCollection(item, collection));
     }
 
     private bool IsCollectionExpanded(ReadableCollection collection)
@@ -838,6 +981,7 @@
             "copy" => "\uE8C8",
             "delete" => "\uE74D",
             "open" => "\uE8A7",
+            "move" => "\uE8AB",
             "folder" => "\uE8B7",
             "folderAdd" => "\uE8F4",
             "settings" => "\uE713",

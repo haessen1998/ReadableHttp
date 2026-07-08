@@ -132,6 +132,8 @@ public sealed record CollectionEventArgs(ReadableCollection Collection);
 
 public sealed record RequestEventArgs(ReadableCollection Collection, ReadableRequest Request);
 
+public sealed record CollectionMoveEventArgs(ReadableCollection Collection, ReadableCollection? TargetParent);
+
 public sealed record RequestMoveEventArgs(ReadableCollection SourceCollection, ReadableRequest Request, ReadableCollection TargetCollection);
 
 public sealed record SpecificationEventArgs(ReadableSpecification Specification);

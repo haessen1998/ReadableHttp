@@ -784,6 +784,24 @@
     white-space: nowrap;
 }
 
+.move-target-submenu {
+    display: grid;
+}
+
+.move-target-submenu > .submenu-trigger {
+    min-width: 0;
+}
+
+.move-target-submenu > .submenu-panel {
+    top: -4px;
+}
+
+.menu-separator {
+    height: 1px;
+    margin: 3px 4px;
+    background: var(--line-soft);
+}
+
 .request-empty {
     padding: 3px 6px 4px;
 }
