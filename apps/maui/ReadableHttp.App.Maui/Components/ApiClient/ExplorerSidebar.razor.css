@@ -4,17 +4,12 @@
     min-width: 260px;
     max-width: 440px;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     border-right: 1px solid var(--line);
     background: var(--panel);
     display: flex;
     flex-direction: column;
     font-size: calc(13px * var(--font-scale));
-}
-
-.sidebar-panel:has(.row-actions.open),
-.sidebar-panel:has(.title-actions.open) {
-    overflow: visible;
 }
 
 .sidebar-flyout-backdrop {
@@ -32,6 +27,14 @@
 .nav-block,
 .sidebar-env {
     flex: 0 0 auto;
+}
+
+.sidebar-scroll-region {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: visible;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
 .sidebar-brand,

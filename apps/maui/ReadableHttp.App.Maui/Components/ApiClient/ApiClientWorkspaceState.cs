@@ -3924,7 +3924,10 @@ public sealed class ApiClientWorkspaceState
         };
         MergeVariables(context.Variables, Workspace?.Variables);
         MergeVariables(context.Variables, SelectedEnvironment?.Variables);
-        MergeVariables(context.Variables, SelectedCollection?.Variables);
+        foreach (var collection in CollectionVariableHierarchy(SelectedCollection))
+        {
+            MergeVariables(context.Variables, collection.Variables);
+        }
         if (ActiveRequestTab is { } tab)
         {
             var request = tab.Origin == RequestTabOrigin.Collection
@@ -3934,6 +3937,23 @@ public sealed class ApiClientWorkspaceState
         }
 
         return context;
+    }
+
+    private IReadOnlyList<ReadableCollection> CollectionVariableHierarchy(ReadableCollection? collection)
+    {
+        if (collection is null)
+        {
+            return [];
+        }
+
+        var hierarchy = new List<ReadableCollection>();
+        for (var current = collection; current is not null; current = FindParentCollection(current))
+        {
+            hierarchy.Add(current);
+        }
+
+        hierarchy.Reverse();
+        return hierarchy;
     }
 
     private static void MergeVariables(
