@@ -1,7 +1,9 @@
 @using ReadableHttp
 @using System.Text.Json
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
-<aside class="sidebar-panel" @onclick="CloseFlyouts">
+<aside @ref="sidebarElement" class="sidebar-panel" @onclick="CloseFlyouts">
     @if (HasOpenFlyout)
     {
         <button class="sidebar-flyout-backdrop" title="@T("close")" @onclick="CloseFlyouts"></button>
@@ -204,6 +206,9 @@
     private string specsSort = "name";
     private readonly HashSet<string> expandedCollectionIds = [];
     private readonly Dictionary<string, string> requestSorts = [];
+    private ElementReference sidebarElement;
+    private ExplorerSidebarMenuInterop? menuInterop;
+    private bool menuPositionPending;
 
     [Parameter] public string WorkspacePath { get; set; } = string.Empty;
     [Parameter] public string WorkspaceStatus { get; set; } = string.Empty;
@@ -625,6 +630,7 @@
         }
 
         openMenuKey = string.Equals(openMenuKey, key, StringComparison.Ordinal) ? null : key;
+        menuPositionPending = openMenuKey is not null;
         pendingDeleteWorkspacePath = null;
     }
 
@@ -663,7 +669,30 @@
     {
         quickSwitchOpen = false;
         openMenuKey = null;
+        menuPositionPending = false;
         pendingDeleteWorkspacePath = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            menuInterop = new ExplorerSidebarMenuInterop(JS);
+        }
+
+        if (menuPositionPending && menuInterop is not null)
+        {
+            menuPositionPending = false;
+            await menuInterop.PositionOpenMenuAsync(sidebarElement);
+        }
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (menuInterop is not null)
+        {
+            await menuInterop.DisposeAsync();
+        }
     }
 
     private void ClearSearch()

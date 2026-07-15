@@ -670,9 +670,10 @@
 }
 
 .more-menu {
-    position: absolute;
-    right: 0;
-    top: 22px;
+    position: fixed;
+    right: auto;
+    top: 0;
+    left: 0;
     z-index: 40;
     display: none;
     min-width: 162px;
@@ -682,11 +683,16 @@
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
     opacity: 0.9;
     padding: 4px;
+    visibility: hidden;
 }
 
 .row-actions.open .more-menu,
 .title-actions.open .more-menu {
     display: grid;
+}
+
+.more-menu[data-positioned="true"] {
+    visibility: visible;
 }
 
 .more-menu button {
@@ -973,10 +979,10 @@
 }
 
 .quick-workspace-more {
-    top: auto;
+    top: 0;
     right: auto;
-    bottom: -4px;
-    left: calc(100% + 6px);
+    bottom: auto;
+    left: 0;
     min-width: 188px;
     z-index: 80;
 }
